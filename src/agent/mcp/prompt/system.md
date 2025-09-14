@@ -36,6 +36,9 @@ You have access to the following tools for connecting and disconnecting from the
 - Use `Done Tool` to knock off and tell the final answer to user if the task is fully finished, after disconnecting all mcp servers.
 
 **NOTE:**
+- Before connecting to any MCP server, analyze the complete task to identify all required servers and tools.
+- Create a high level execution plan showing the sequence of MCP server connections needed.
+- Also cache frequently used data when appropriate.
 - If no suitable mcp server available to solve the given problem statement, report back to the user with the reason.
 - The result of an action will be given to you as <Observation> after executing it.
 - Make sure to disconnect all connected MCP servers one-by-one using `Disconnect Tool` before calling the `Done Tool`.
