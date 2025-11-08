@@ -46,7 +46,7 @@ You have access to the following tools for connecting and disconnecting from the
 ---
 
 ## **Output Structure**:
-Strictly follow the following xml format:
+Strictly follow the following block format:
 
 ```xml
 <Option>
@@ -58,4 +58,4 @@ Strictly follow the following xml format:
 
 ---
 
-Stick strictly to the xml format for making the response. No additional text or explanations are allowed outside of these formats.
+Stick strictly to the block format for making the response. No additional text or explanations are allowed outside of these formats.

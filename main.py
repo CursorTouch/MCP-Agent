@@ -6,7 +6,7 @@ import os
 
 load_dotenv()
 
-llm=ChatGemini(model='gemini-2.0-flash',api_key=os.getenv('GOOGLE_API_KEY'),temperature=0)
+llm=ChatGemini(model='gemini-2.5-flash-lite',api_key=os.getenv('GOOGLE_API_KEY'),temperature=0)
 client=MCPClient.from_config_file('./config.json')
 agent=MCPAgent(client=client,llm=llm,verbose=True,max_iteration=100)
 

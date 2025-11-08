@@ -5,8 +5,8 @@ from enum import Enum
 class JSONRPCRequest(BaseModel):
     jsonrpc: str=Field(default="2.0")
     id: Optional[str|int]=None
-    params: Optional[dict[str,Any]]=None
     method: Optional['Method']=None
+    params: Optional[dict[str,Any]]=None
 
     model_config=ConfigDict(extra='allow')
 

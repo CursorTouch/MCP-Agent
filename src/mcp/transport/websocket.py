@@ -5,85 +5,108 @@ import websockets
 import asyncio
 import json
 
+
 class WebSocketTransport:
+    """
+    WebSocket Transport for MCP
+    Uses asyncio.Future for one-shot request/response correlation.
+    """
+
     def __init__(self, url: str, headers: Optional[dict[str, str]] = None):
         self.url = url
         self.headers = headers or {}
         self.websocket: Optional[websockets.ClientConnection] = None
         self.listen_task: Optional[asyncio.Task] = None
-        self.queue: Dict[str, asyncio.Queue[JSONRPCResponse | JSONRPCError]] = {}
+        self.pending: Dict[str, asyncio.Future] = {}  # request.id -> Future
 
     async def connect(self):
-        '''
-        Create a WebSocket Client
-        '''
-        self.websocket = await websockets.connect(self.url, additional_headers=self.headers, subprotocols=["mcp"])
+        """Create a WebSocket client and start listening."""
+        self.websocket = await websockets.connect(
+            self.url,
+            additional_headers=self.headers,
+            subprotocols=["mcp"],
+        )
         self.listen_task = asyncio.create_task(self.listen())
 
     async def listen(self):
-        '''
-        Listen for JSON RPC messages from the MCP
-        '''
+        """Listen for JSON-RPC messages from the MCP server."""
         try:
             async for data in self.websocket:
                 try:
-                    content:dict = json.loads(data)
-                    id=content.get("id")
+                    content: dict = json.loads(data)
+                    msg_id = content.get("id")
+
                     if "result" in content:
-                        message = JSONRPCResponse.model_validate(content.get("result"))
+                        message = JSONRPCResponse.model_validate(content)
                     elif "error" in content:
-                        error = Error.model_validate(content.get("error"))
-                        message = JSONRPCError(id=id, error=error)
-                    if id in self.queue:
-                        queue=self.queue.get(id)
-                        await queue.put(message)
+                        err = Error.model_validate(content["error"])
+                        message = JSONRPCError(id=msg_id, error=err, message=err.message)
+                    else:
+                        # Ignore notifications or invalid messages for now
+                        continue
+
+                    # Resolve the corresponding pending future
+                    future = self.pending.pop(msg_id, None)
+                    if future and not future.done():
+                        future.set_result(message)
+
                 except Exception as e:
-                    print(f"Error parsing message: {e}")
+                    print(f"Error parsing WebSocket message: {e}")
+
         except websockets.exceptions.ConnectionClosed:
-            print("WebSocket closed.")
+            print("WebSocket connection closed.")
+        except Exception as e:
+            print(f"WebSocket listen error: {e}")
 
-    async def send_request(self, request: JSONRPCRequest) -> JSONRPCResponse | JSONRPCError:
-        '''
-        Send a JSON RPC request to the MCP server
+    async def send_request(self, request: JSONRPCRequest) -> JSONRPCResponse:
+        """
+        Send a JSON-RPC request and wait for its response.
+        """
+        if not self.websocket:
+            raise MCPError(code=-1, message="WebSocket not connected")
 
-        Args:
-            request: JSON RPC request object
+        future = asyncio.get_event_loop().create_future()
+        self.pending[request.id] = future
 
-        Returns:
-            JSON RPC response object
-
-        Raises:
-            MCPError: If the request fails
-        '''
-        id=request.id
-        self.queue[id] = asyncio.Queue()
         await self.websocket.send(json.dumps(request.model_dump()))
-        queue=self.queue.get(id)
-        response = await queue.get()
+
+        try:
+            response = await asyncio.wait_for(future, timeout=30)
+        except asyncio.TimeoutError:
+            self.pending.pop(request.id, None)
+            raise MCPError(code=-1, message="Request timed out")
+
         if isinstance(response, JSONRPCError):
-            error=response.error
-            raise MCPError(code=error.code, message=error.message)
+            raise MCPError(code=response.error.code, message=response.error.message)
+
         return response
 
     async def send_notification(self, notification: JSONRPCRequest):
-        '''
-        Send a JSON RPC notification to the MCP server
+        """
+        Send a JSON-RPC notification (fire and forget).
+        """
+        if not self.websocket:
+            raise MCPError(code=-1, message="WebSocket not connected")
 
-        Args:
-            notification: JSON RPC notification object
-        '''
         await self.websocket.send(json.dumps(notification.model_dump()))
 
     async def disconnect(self):
-        '''
-        Disconnect from the MCP server
-        '''
+        """Gracefully close the WebSocket connection."""
         if self.listen_task:
             self.listen_task.cancel()
             try:
                 await self.listen_task
             except asyncio.CancelledError:
                 pass
+            finally:
+                self.listen_task = None
 
         if self.websocket:
             await self.websocket.close()
+            self.websocket = None
+
+        # Cancel any unresolved Futures
+        for fut in self.pending.values():
+            if not fut.done():
+                fut.cancel()
+        self.pending.clear()

@@ -1,76 +1,74 @@
-from src.mcp.types.json_rpc import JSONRPCRequest,JSONRPCResponse,JSONRPCError,JSONRPCNotification
-from abc import abstractmethod,ABC
+from src.mcp.types.json_rpc import (
+    JSONRPCRequest,
+    JSONRPCResponse,
+    JSONRPCError,
+    JSONRPCNotification,
+)
+from abc import ABC, abstractmethod
+from typing import Callable
 
 class BaseTransport(ABC):
     """
-    The abstract class for transport layer of the MCP
+    Abstract base class for all MCP transport implementations.
+    Provides the minimal interface for sending requests,
+    sending notifications, and listening for incoming messages.
     """
+
+    def attach_callbacks(self, callbacks:dict[str,Callable]):
+        self.callbacks = callbacks
+
     @abstractmethod
-    async def connect(self)->None:
-        '''
+    async def connect(self) -> None:
+        """
         Establish connection to the MCP server.
-        '''
+        """
         pass
 
     @abstractmethod
-    async def disconnect(self)->None:
-        '''
+    async def disconnect(self) -> None:
+        """
         Close connection to the MCP server.
-        '''
+        """
         pass
 
     @abstractmethod
-    async def receive_request(self)->JSONRPCRequest|None:
-        '''
-        Receive JSON RPC request from the MCP server.
-
-        Returns:
-            JSON RPC request object
-        '''
-        pass
-
-    @abstractmethod
-    async def receive_response(self,id:str|int)->JSONRPCResponse|None:
-        '''
-        Receive JSON RPC response from the MCP server.
-
-        Returns:
-            JSON RPC response object
-        '''
-        pass
-
-    @abstractmethod
-    async def send_request(self,request:JSONRPCRequest)->JSONRPCResponse|JSONRPCError|None:
-        '''
-        Send JSON RPC request to the MCP server.
+    async def send_request(
+        self, request: JSONRPCRequest
+    ) -> JSONRPCResponse | JSONRPCError | None:
+        """
+        Send a JSON-RPC request to the MCP server and wait for a response.
 
         Args:
             request: JSONRPCRequest object
-        
+
+        Returns:
+            JSONRPCResponse or JSONRPCError
+
         Raises:
-            TimeoutError: If the request times out
-            
-            Exception: If the request fails
-        '''
+            TimeoutError: If the request times out.
+            Exception: If the request fails.
+        """
         pass
 
     @abstractmethod
-    async def send_response(self,response:JSONRPCResponse)->None:
-        '''
-        Send JSON RPC response to the MCP server.
+    async def send_notification(self, notification: JSONRPCNotification) -> None:
+        """
+        Send a JSON-RPC notification to the MCP server.
 
         Args:
-            response: JSONRPCResponse object
-        '''
+            notification: JSONRPCNotification object
+        """
         pass
 
     @abstractmethod
-    async def send_notification(self,notification:JSONRPCNotification)->None:
-        '''
-        Send JSON RPC notification to the MCP server.
+    async def recieved_request(self, request: JSONRPCRequest) -> JSONRPCResponse:
+        """
+        Receive a JSON-RPC request from the MCP server and await response.
 
         Args:
-            notification: JSON RPC notification object
-        '''
-        pass
+            request: JSONRPCRequest object
 
+        Returns:
+            JSONRPCResponse
+        """
+        pass
