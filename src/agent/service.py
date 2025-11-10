@@ -24,64 +24,76 @@ class Agent:
         self.llm=llm
 
     async def ainvoke(self,query:str)->str:
+        messages=[]
+        agent_response=None
         servers_info=self.client.get_servers_info()
-        messages=[
-            HumanMessage(content=f"<User-Query>{query}</User-Query>")
-        ]
-        for steps in range(1,self.max_steps+1):
-            sessions=[self.client.get_session(server_info['name']) for server_info in servers_info if self.client.is_connected(server_info['name'])]
-            await self.registry.add_tools_from_sessions(sessions=sessions)
-            system_message=SystemMessage(content=Prompt.system_prompt(**{
-                'max_steps':self.max_steps,
-                'registry':self.registry,
-                'servers_info':servers_info
-            }))
-            for attempt in range(self.max_consecutive_failures):
-                try:
-                    llm_response=await self.llm.ainvoke([system_message,*messages])
-                    response=extract_llm_response(llm_response.content)
+        try:
+            messages.append(HumanMessage(content=f"<User-Query>{query}</User-Query>"))
+            for steps in range(1,self.max_steps+1):
+                sessions=[self.client.get_session(server_info['name']) for server_info in servers_info if self.client.is_connected(server_info['name'])]
+                await self.registry.add_tools_from_sessions(sessions=sessions)
+                system_message=SystemMessage(content=Prompt.system_prompt(**{
+                    'max_steps':self.max_steps,
+                    'registry':self.registry,
+                    'servers_info':servers_info
+                }))
+                for attempt in range(self.max_consecutive_failures):
+                    try:
+                        llm_response=await self.llm.ainvoke([system_message,*messages])
+                        response=extract_llm_response(llm_response.content)
+                        break
+                    except Exception as e:
+                        logger.error(f"Error in LLM invocation or response extraction: {e}")
+                        if attempt+1<self.max_consecutive_failures-1:
+                            continue
+                        logger.error(f"Max consecutive failures reached. Failed to get a valid response after {self.max_consecutive_failures} attempts.")
+                        agent_response=AgentResponse(is_success=False,response=f"Failed to get a valid response after {self.max_consecutive_failures} attempts.")
+                        break
+                
+                thought=response.get('thought','')
+                logger.info(f"Step {steps}")
+                logger.info(f"Thought: {response.get('thought','')}")
+                action_name=response.get('action_name','')
+                action_input=response.get('action_input',{})
+                messages.append(AIMessage(content=Prompt.action_prompt(thought=thought,action_name=action_name,action_input=action_input)))
+                action_result=await self.registry.aexecute(tool_name=action_name,**(action_input|{'client':self.client}))
+                if action_name.startswith("Done"):
+                    answer=action_result.content
+                    logger.info(f"Final Answer: {answer}\n")
+                    messages.append(HumanMessage(content=Prompt.answer_prompt(thought=thought,answer=answer)))
+                    self.client.close_all_sessions()
+                    agent_response=AgentResponse(is_success=True,response=answer)
                     break
-                except Exception as e:
-                    logger.error(f"Error in LLM invocation or response extraction: {e}")
-                    if attempt+1<self.max_consecutive_failures-1:
-                        continue
-                    logger.error(f"Max consecutive failures reached. Failed to get a valid response after {self.max_consecutive_failures} attempts.")
-                    return AgentResponse(is_success=False,response=f"Failed to get a valid response after {self.max_consecutive_failures} attempts.")
-            
-            thought=response.get('thought','')
-            logger.info(f"Step {steps}")
-            logger.info(f"Thought: {response.get('thought','')}")
-            action_name=response.get('action_name','')
-            action_input=response.get('action_input',{})
-            messages.append(AIMessage(content=Prompt.action_prompt(thought=thought,action_name=action_name,action_input=action_input)))
-            action_result=await self.registry.aexecute(tool_name=action_name,**(action_input|{'client':self.client}))
-            if action_name.startswith("Done"):
-                answer=action_result.content
-                logger.info(f"Final Answer: {answer}\n")
-                messages.append(HumanMessage(content=Prompt.answer_prompt(thought=thought,answer=answer)))
-                return AgentResponse(is_success=True,response=answer)
-            else:
-                logger.info(f"Action: {action_name}({', '.join([f'{k}={v}' for k,v in action_input.items()])})")
-                if isinstance(action_result.content,list):
-                    texts,images=[],[]
-                    for content in action_result.content:
-                        if isinstance(content,TextContent):
-                            texts.append(content.text)
-                        elif isinstance(content,ImageContent):
-                            images.append(content.data)
-                        else:
-                            # TODO handle other content types
-                            logger.warning(f"Unsupported content type: {type(content)}")
-                            pass
-                    observation="\n".join(texts)
-                    if images:
-                        messages.append(ImageMessage(content=observation,images=images))
-                    elif texts:
-                        messages.append(HumanMessage(content=Prompt.observation_prompt(steps=steps,max_steps=self.max_steps,observation=observation)))
                 else:
-                    observation=action_result.content if action_result.is_success else action_result.error  
-                    messages.append(HumanMessage(content=Prompt.observation_prompt(steps=steps,max_steps=self.max_steps,observation=observation)))
-                logger.info(f"Observation: {observation}\n")
-        self.client.close_all_sessions()
-        return AgentResponse(is_success=False,response=f"Max steps reached. Failed to complete the task after {self.max_steps} steps.")
+                    logger.info(f"Action: {action_name}({', '.join([f'{k}={v}' for k,v in action_input.items()])})")
+                    if isinstance(action_result.content,list):
+                        texts,images=[],[]
+                        for content in action_result.content:
+                            if isinstance(content,TextContent):
+                                texts.append(content.text)
+                            elif isinstance(content,ImageContent):
+                                images.append(content.data)
+                            else:
+                                # TODO handle other content types
+                                logger.warning(f"Unsupported content type: {type(content)}")
+                                pass
+                        observation="\n".join(texts)
+                        if images:
+                            messages.append(ImageMessage(content=observation,images=images))
+                        elif texts:
+                            messages.append(HumanMessage(content=Prompt.observation_prompt(steps=steps,max_steps=self.max_steps,observation=observation)))
+                    else:
+                        observation=action_result.content if action_result.is_success else action_result.error  
+                        messages.append(HumanMessage(content=Prompt.observation_prompt(steps=steps,max_steps=self.max_steps,observation=observation)))
+                    logger.info(f"Observation: {observation}\n")
+        except KeyboardInterrupt:
+            logger.info("Keyboard interrupt received. Exiting...")
+            agent_response=AgentResponse(is_success=False,response="Keyboard interrupt received. Exiting...")
+        except Exception as e:
+            logger.error(f"Error in agent operation: {e}")
+            agent_response=AgentResponse(is_success=False,response=f"Error in agent operation: {e}")
+        finally:
+            # Safely close all sessions before quitting
+            await self.client.close_all_sessions()
+        return agent_response
         
