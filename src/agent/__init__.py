@@ -1,9 +1,5 @@
-from abc import ABC,abstractmethod
+from src.agent.service import Agent
 
-class BaseAgent(ABC):
-    @abstractmethod
-    def invoke(self,input:str):
-        pass
-    @abstractmethod
-    def stream(self,input:str):
-        pass
+__all__=[
+    "Agent"
+]

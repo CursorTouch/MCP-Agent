@@ -1,6 +1,8 @@
 from src.mcp.types.resources import TextContent as ResourceTextContent, BinaryContent as ResourceBinaryContent
-from typing import Optional,Any
+from typing import Optional,Any,Union
 from pydantic import BaseModel
+
+Content = Union['TextContent', 'ImageContent', 'AudioContent', 'EmbeddedResource']
 
 class Tool(BaseModel):
     name: str
@@ -33,7 +35,7 @@ class EmbeddedResource(BaseModel):
     resource: ResourceTextContent | ResourceBinaryContent
 
 class ToolResult(BaseModel):
-    content: list[TextContent | ImageContent | AudioContent | EmbeddedResource]
+    content: list[Content]
     isError: bool=False
     structuredContent: Optional[dict[str,Any]]=None
 

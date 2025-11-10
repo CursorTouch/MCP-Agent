@@ -1,19 +1,18 @@
-from src.inference.gemini import ChatGemini
+from src.llms.google import ChatGoogle
 from src.mcp.client import MCPClient
-from src.agent.mcp import MCPAgent
+from src.agent import Agent
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
 
-llm=ChatGemini(model='gemini-2.5-flash-lite',api_key=os.getenv('GOOGLE_API_KEY'),temperature=0)
+llm=ChatGoogle(model='gemini-2.5-flash-lite',api_key=os.getenv('GOOGLE_API_KEY'),temperature=0)
 client=MCPClient.from_config_file('./config.json')
-agent=MCPAgent(client=client,llm=llm,verbose=True,max_iteration=100)
-
-input=input('Enter a task: ')
+agent=Agent(client=client,llm=llm)
 
 async def main():
-    response=await agent.invoke(input=input)
+    query=input('Enter a task: ')
+    response=await agent.ainvoke(query=query)
     print(response)
 
 if __name__ == '__main__':
