@@ -1,6 +1,6 @@
 from src.mcp.types.resources import TextContent as ResourceTextContent, BinaryContent as ResourceBinaryContent
+from pydantic import BaseModel,ConfigDict
 from typing import Optional,Any,Union
-from pydantic import BaseModel
 
 Content = Union['TextContent', 'ImageContent', 'AudioContent', 'EmbeddedResource']
 
@@ -10,6 +10,8 @@ class Tool(BaseModel):
     inputSchema: dict[str,Any]
     outputSchema: Optional[dict[str,Any]]=None
     annotations: Optional['Annotations']=None
+
+    model_config=ConfigDict(extra='allow')
 
 
 class ToolRequest(BaseModel):

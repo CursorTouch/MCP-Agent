@@ -30,7 +30,7 @@ class Agent:
         try:
             messages.append(HumanMessage(content=f"<User-Query>{query}</User-Query>"))
             for steps in range(1,self.max_steps+1):
-                sessions=[self.client.get_session(server_info['name']) for server_info in servers_info if self.client.is_connected(server_info['name'])]
+                sessions=self.client.get_all_sessions()
                 await self.registry.add_tools_from_sessions(sessions=sessions)
                 system_message=SystemMessage(content=Prompt.system_prompt(**{
                     'max_steps':self.max_steps,
@@ -61,7 +61,7 @@ class Agent:
                     answer=action_result.content
                     logger.info(f"Final Answer: {answer}\n")
                     messages.append(HumanMessage(content=Prompt.answer_prompt(thought=thought,answer=answer)))
-                    self.client.close_all_sessions()
+                    await self.client.close_all_sessions()
                     agent_response=AgentResponse(is_success=True,response=answer)
                     break
                 else:
@@ -93,7 +93,8 @@ class Agent:
             logger.error(f"Error in agent operation: {e}")
             agent_response=AgentResponse(is_success=False,response=f"Error in agent operation: {e}")
         finally:
-            # Safely close all sessions before quitting
-            await self.client.close_all_sessions()
+            # Safely close all sessions before quitting just in case agent misses to disconnect
+            if self.client.get_all_sessions():
+                await self.client.close_all_sessions()
         return agent_response
         

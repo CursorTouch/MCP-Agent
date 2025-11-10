@@ -89,6 +89,10 @@ class MCPClient:
         '''Check if a session is connected'''
         return server_name in self.sessions
     
+    def get_all_sessions(self)->list[Session]:
+        '''Get all sessions'''
+        return list(self.sessions.values())
+    
     def get_session(self,name:str)->Session|None:
         '''Get a session'''
         if not self.is_connected(name):
