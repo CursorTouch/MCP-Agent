@@ -12,3 +12,7 @@ class Connect(SharedBaseModel):
 
 class Disconnect(SharedBaseModel):
     name:str = Field(...,description="the name of the server to disconnect from",examples=["ucd-mcp"])
+
+class Resource(SharedBaseModel):
+    name:str = Field(...,description="the name of the server to access the resource from",examples=["ucd-mcp"])
+    uri:str = Field(...,description="the URI of the resource to access",examples=["/resources/12345"])

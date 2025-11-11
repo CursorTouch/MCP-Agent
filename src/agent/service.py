@@ -1,4 +1,5 @@
-from src.mcp.types.tools import TextContent,ImageContent,AudioContent,EmbeddedResource
+from src.mcp.types.resources import ResourceResult,TextContent as ResourceTextContent,BinaryContent as ResourceBinaryContent
+from src.mcp.types.tools import ToolResult,TextContent as ToolTextContent,ImageContent as ToolImageContent
 from src.messages import AIMessage,HumanMessage,SystemMessage,ImageMessage
 from src.agent.tools import connect_tool,disconnect_tool,done_tool
 from src.agent.utils import extract_llm_response
@@ -68,18 +69,27 @@ class Agent:
                     logger.info(f"Action: {action_name}({', '.join([f'{k}={v}' for k,v in action_input.items()])})")
                     if isinstance(action_result.content,list):
                         texts,images=[],[]
-                        for content in action_result.content:
-                            if isinstance(content,TextContent):
-                                texts.append(content.text)
-                            elif isinstance(content,ImageContent):
-                                images.append(content.data)
-                            else:
-                                # TODO handle other content types
-                                logger.warning(f"Unsupported content type: {type(content)}")
-                                pass
+                        if isinstance(action_result,ToolResult):
+                            contents=action_result.content
+                            for content in contents:
+                                if isinstance(content,ToolTextContent):
+                                    texts.append(content.text)
+                                elif isinstance(content,ToolImageContent):
+                                    images.append(content.data)
+                                else:
+                                    # TODO handle other content types
+                                    logger.warning(f"Unsupported content type: {type(content)}")
+                                    pass
+                        elif isinstance(action_result,ResourceResult):
+                            contents=action_result.contents
+                            for content in contents:
+                                if isinstance(content,ResourceTextContent):
+                                    texts.append(content.text)
+                                else:
+                                    pass
                         observation="\n".join(texts)
                         if images:
-                            messages.append(ImageMessage(content=observation,images=images))
+                            messages.append(ImageMessage(content=Prompt.observation_prompt(steps=steps,max_steps=self.max_steps,observation=observation),images=images))
                         elif texts:
                             messages.append(HumanMessage(content=Prompt.observation_prompt(steps=steps,max_steps=self.max_steps,observation=observation)))
                     else:

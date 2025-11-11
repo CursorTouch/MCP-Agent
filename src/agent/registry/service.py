@@ -1,4 +1,3 @@
-from src.mcp.types.tools import ToolResult as MCPToolResult
 from src.agent.registry.views import ToolResult
 from src.mcp.client.service import Session
 from functools import partial
@@ -69,8 +68,6 @@ class Registry:
             if tool.model is not None:
                 tool.model.model_validate(kwargs)
             content = tool.invoke(**self._sanitize_kwargs(tool, kwargs))
-            if isinstance(content, MCPToolResult):
-                content = content.content
             return ToolResult(is_success=True, content=content)
         except Exception as error:
             return ToolResult(is_success=False, error=str(error))
@@ -84,8 +81,6 @@ class Registry:
             if tool.model is not None:
                 tool.model.model_validate(kwargs)
             content = await tool.ainvoke(**self._sanitize_kwargs(tool, kwargs))
-            if isinstance(content, MCPToolResult):
-                content = content.content
             return ToolResult(is_success=True, content=content)
         except Exception as error:
             return ToolResult(is_success=False, error=str(error))
