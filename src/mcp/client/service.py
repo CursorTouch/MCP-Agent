@@ -1,8 +1,8 @@
 from src.mcp.client.utils import create_transport_from_server_config
 from src.mcp.types.elicitation import ElicitationFn
 from src.mcp.types.sampling import SamplingFn
+from src.mcp.client.session import MCPSession
 from src.mcp.types.roots import ListRootsFn
-from src.mcp.client.session import Session
 from src.mcp.types.info import ClientInfo
 from typing import Callable, Optional
 from uuid import uuid4
@@ -16,7 +16,7 @@ class MCPClient:
         self.sampling_callback=sampling_callback
         self.list_roots_callback=list_roots_callback
         self.elicitation_callback=elicitation_callback
-        self.sessions:dict[str,Session]={}
+        self.sessions:dict[str,MCPSession]={}
         
     @classmethod
     def from_config(cls,config:dict[str,dict[str,Any]],sampling_callback:Optional[Callable]=None,elicitation_callback:Optional[Callable]=None,list_roots_callback:Optional[Callable]=None,logging_callback:Optional[Callable]=None)->'MCPClient':
@@ -66,8 +66,8 @@ class MCPClient:
             self.close_session(name)
         del self.servers[name]
 
-    async def create_session(self,name:str)->Session:
-        '''Create a session'''
+    async def create_session(self,name:str)->MCPSession:
+        '''Create a MCPSession'''
         if not self.servers:
             raise Exception("No MCP servers available")
         if name not in self.servers:
@@ -79,7 +79,7 @@ class MCPClient:
             'elicitation':self.elicitation_callback,
             'list_roots':self.list_roots_callback,
         })
-        session=Session(transport=transport,client_info=self.client_info)
+        session=MCPSession(transport=transport,client_info=self.client_info)
         await session.connect()
         await session.initialize()
         self.sessions[name]=session
@@ -89,11 +89,11 @@ class MCPClient:
         '''Check if a session is connected'''
         return server_name in self.sessions
     
-    def get_all_sessions(self)->list[Session]:
+    def get_all_sessions(self)->list[MCPSession]:
         '''Get all sessions'''
         return list(self.sessions.values())
     
-    def get_session(self,name:str)->Session|None:
+    def get_session(self,name:str)->MCPSession|None:
         '''Get a session'''
         if not self.is_connected(name):
             raise ValueError(f"Session {name} not found")

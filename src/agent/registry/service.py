@@ -1,5 +1,5 @@
 from src.agent.registry.views import ToolResult
-from src.mcp.client.service import Session
+from src.mcp.client.service import MCPSession
 from functools import partial
 from textwrap import dedent
 from src.tool import Tool
@@ -36,7 +36,7 @@ class Registry:
     def add_tools(self, tools: list[Tool]):
         self.tools.extend(tools)
     
-    async def add_tools_from_session(self,mcp_session:Session):
+    async def add_tools_from_session(self,mcp_session:MCPSession):
         mcp_tools=await mcp_session.tools_list()
         tools=[Tool(
             name=mcp_tool.name,
@@ -46,7 +46,7 @@ class Registry:
         ) for mcp_tool in mcp_tools]
         self.mcp_tools.extend(tools)
     
-    async def add_tools_from_sessions(self,sessions:list[Session]):
+    async def add_tools_from_sessions(self,sessions:list[MCPSession]):
         self.mcp_tools=[]
         await asyncio.gather(*[self.add_tools_from_session(session) for session in sessions])
 

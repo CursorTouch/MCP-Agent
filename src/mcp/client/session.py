@@ -1,19 +1,15 @@
 from src.mcp.types.capabilities import ClientCapabilities, RootCapability, SamplingCapability, ElicitationCapability
-from src.mcp.types.json_rpc import JSONRPCRequest, JSONRPCNotification, JSONRPCResponse, Method
 from src.mcp.types.resources import Resource, ResourceResult, ResourceTemplate
+from src.mcp.types.json_rpc import JSONRPCRequest, JSONRPCNotification, Method
 from src.mcp.types.initialize import InitializeResult,InitializeParams
 from src.mcp.types.tools import Tool, ToolRequest, ToolResult
 from src.mcp.types.prompts import Prompt, PromptResult
-from src.mcp.types.elicitation import ElicitResult
 from src.mcp.transport.base import BaseTransport
-from src.mcp.types.sampling import MessageResult
 from src.mcp.types.info import ClientInfo
-from typing import Optional,Any,Callable
-from src.mcp.exception import MCPError
-from src.mcp.types.roots import Root
+from typing import Optional,Any
 from uuid import uuid4
 
-class Session:
+class MCPSession:
     def __init__(self,transport:BaseTransport,client_info:ClientInfo,)->None:
         self.id=str(uuid4())
         self.transport=transport
