@@ -15,13 +15,13 @@ async def connect_tool(name:str,**kwargs):
         return f'Server {name.lower()} already connected.'
     session=await client.create_session(name.lower())   
     client.sessions[name.lower()]=session
-    return f'Server {name.lower()} now connected.'
+    return f'{name.lower()} now connected.'
 
 @Tool('Disconnect Tool',args_schema=Disconnect)
 async def disconnect_tool(name:str,**kwargs):
     '''Disconnect from a specific MCP server'''
     client:MCPClient=kwargs['client']
     if name.lower() not in client.sessions:
-        return f'Server {name} not connected.'
+        return f'{name.lower()} not connected.'
     await client.close_session(name.lower())
-    return f'Server {name.lower()} now disconnected.'
+    return f'{name.lower()} now disconnected.'
