@@ -8,6 +8,8 @@ from src.agent.views import AgentResponse
 from src.agent.registry import Registry
 from src.llms.base import BaseChatLLM
 from src.mcp.client import MCPClient
+from rich.markdown import Markdown
+from rich.console import Console
 from typing import List,cast
 import logging
 
@@ -22,6 +24,7 @@ class Agent:
         self.registry=Registry(tools=[connect_tool,disconnect_tool,done_tool,search_tool,resource_tool])
         self.max_consecutive_failures=max_consecutive_failures
         self.max_steps=max_steps
+        self.console=Console()
         self.client=client
         self.llm=llm
 
@@ -109,4 +112,9 @@ class Agent:
             if self.client.get_all_sessions():
                 await self.client.close_all_sessions()
         return agent_response
+        
+
+    async def print_response(self,query:str)->None:
+        agent_response=await self.ainvoke(query)
+        self.console.print(Markdown(agent_response.response if agent_response.is_success else agent_response.error))
         

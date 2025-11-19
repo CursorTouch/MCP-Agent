@@ -10,3 +10,4 @@ class LLMResponse(TypedDict):
 class AgentResponse:
     is_success:bool=False
     response:str=''
+    error:str=''

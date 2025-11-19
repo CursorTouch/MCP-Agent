@@ -12,8 +12,7 @@ agent=Agent(client=client,llm=llm)
 
 async def main():
     query=input('Enter a task: ')
-    response=await agent.ainvoke(query=query)
-    print(response)
+    await agent.print_response(query=query)
 
 if __name__ == '__main__':
     import asyncio
