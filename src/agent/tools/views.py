@@ -19,4 +19,4 @@ class Resource(SharedBaseModel):
     uri:str = Field(...,description="the URI of the resource to access",examples=["/resources/12345"])
 
 class Registry(SharedBaseModel):
-    name:str = Field(...,description="the name of the server to search for from the MCP registry.",examples=["filesystem","docker","sqlite"])
+    name:str = Field(...,description="the keyword to search for in the MCP registry",examples=["filesystem","docker","sqlite"])
