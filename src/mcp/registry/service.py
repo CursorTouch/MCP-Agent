@@ -16,10 +16,6 @@ class MCPRegistry:
     def aclient(self)->AsyncClient:
         return AsyncClient(base_url=self.base_url,headers=self.headers)
     
-    @property
-    def client(self)->Client:
-        return Client(base_url=self.base_url,headers=self.headers)
-    
     async def list_servers(self,request:ListServersRequest)->ListServersResponse:
         response=await self.aclient.get("/servers",params=request.model_dump(exclude_none=True))
         return ListServersResponse(**response.json())

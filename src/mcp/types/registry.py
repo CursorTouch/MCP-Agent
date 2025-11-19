@@ -69,9 +69,9 @@ class Icon(BaseModel):
 class ServerDefinition(BaseModel):
     schema_: Optional[HttpUrl] = None  # $schema renamed to schema_
     _meta: Optional[Dict[str, Any]] = None
+    name: Optional[str] = None
     description: Optional[str] = None
     icons: Optional[List[Icon]] = None  # ✅ optional
-    name: Optional[str] = None
     packages: Optional[List[Package]] = None
     remotes: Optional[List[Transport]] = None  # ✅ optional
     repository: Optional[Repository] = None

@@ -1,4 +1,5 @@
 from pydantic import BaseModel,Field
+from typing import Literal
 
 class SharedBaseModel(BaseModel):
     class Config:
@@ -16,3 +17,6 @@ class Disconnect(SharedBaseModel):
 class Resource(SharedBaseModel):
     name:str = Field(...,description="the name of the server to access the resource from",examples=["ucd-mcp"])
     uri:str = Field(...,description="the URI of the resource to access",examples=["/resources/12345"])
+
+class Registry(SharedBaseModel):
+    name:str = Field(...,description="the name of the server to search for from the MCP registry.",examples=["filesystem","docker","sqlite"])

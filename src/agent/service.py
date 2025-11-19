@@ -1,13 +1,14 @@
-from src.mcp.types.tools import ToolResult,TextContent as ToolTextContent,ImageContent as ToolImageContent
+from src.mcp.types.tools import ToolResult,TextContent as ToolTextContent,ImageContent as ToolImageContent,Content as ToolContent
 from src.mcp.types.resources import ResourceResult,TextContent as ResourceTextContent
+from src.agent.tools import connect_tool,disconnect_tool,done_tool,registry_tool
 from src.messages import AIMessage,HumanMessage,SystemMessage,ImageMessage
-from src.agent.tools import connect_tool,disconnect_tool,done_tool
 from src.agent.utils import extract_llm_response
 from src.agent.prompt.service import Prompt
 from src.agent.views import AgentResponse
 from src.agent.registry import Registry
 from src.llms.base import BaseChatLLM
 from src.mcp.client import MCPClient
+from typing import List,cast
 import logging
 
 logger=logging.getLogger(__name__)
@@ -18,7 +19,7 @@ class Agent:
     def __init__(self,client:MCPClient,llm:BaseChatLLM,max_steps:int=10,max_consecutive_failures:int=3):
         self.name="MCP Agent"
         self.description="A MCP Agent that can use mutliple MCP Servers to perform tasks using their tools."
-        self.registry=Registry(tools=[connect_tool,disconnect_tool,done_tool])
+        self.registry=Registry(tools=[connect_tool,disconnect_tool,done_tool,registry_tool])
         self.max_consecutive_failures=max_consecutive_failures
         self.max_steps=max_steps
         self.client=client
@@ -67,10 +68,11 @@ class Agent:
                     break
                 else:
                     logger.info(f"Action: {action_name}({', '.join([f'{k}={v}' for k,v in action_input.items()])})")
-                    if isinstance(action_result.content,list):
+                    if isinstance(action_result.content,ToolResult):
                         texts,images=[],[]
-                        if isinstance(action_result,ToolResult):
-                            contents=action_result.content
+                        tool_result=action_result.content
+                        if isinstance(tool_result.content,list):
+                            contents=tool_result.content
                             for content in contents:
                                 if isinstance(content,ToolTextContent):
                                     texts.append(content.text)

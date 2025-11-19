@@ -1,5 +1,6 @@
 from src.mcp.client.utils import create_transport_from_server_config
 from src.mcp.types.elicitation import ElicitationFn
+from src.mcp.registry.service import MCPRegistry
 from src.mcp.types.sampling import SamplingFn
 from src.mcp.client.session import MCPSession
 from src.mcp.types.roots import ListRootsFn
@@ -17,6 +18,7 @@ class MCPClient:
         self.list_roots_callback=list_roots_callback
         self.elicitation_callback=elicitation_callback
         self.sessions:dict[str,MCPSession]={}
+        self.registry=MCPRegistry()
         
     @classmethod
     def from_config(cls,config:dict[str,dict[str,Any]],sampling_callback:Optional[Callable]=None,elicitation_callback:Optional[Callable]=None,list_roots_callback:Optional[Callable]=None,logging_callback:Optional[Callable]=None)->'MCPClient':
