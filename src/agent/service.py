@@ -1,6 +1,6 @@
 from src.mcp.types.tools import ToolResult,TextContent as ToolTextContent,ImageContent as ToolImageContent,Content as ToolContent
+from src.agent.tools import connect_tool,disconnect_tool,done_tool,search_tool,resource_tool
 from src.mcp.types.resources import ResourceResult,TextContent as ResourceTextContent
-from src.agent.tools import connect_tool,disconnect_tool,done_tool,registry_tool
 from src.messages import AIMessage,HumanMessage,SystemMessage,ImageMessage
 from src.agent.utils import extract_llm_response
 from src.agent.prompt.service import Prompt
@@ -19,7 +19,7 @@ class Agent:
     def __init__(self,client:MCPClient,llm:BaseChatLLM,max_steps:int=10,max_consecutive_failures:int=3):
         self.name="MCP Agent"
         self.description="A MCP Agent that can use mutliple MCP Servers to perform tasks using their tools."
-        self.registry=Registry(tools=[connect_tool,disconnect_tool,done_tool,registry_tool])
+        self.registry=Registry(tools=[connect_tool,disconnect_tool,done_tool,search_tool,resource_tool])
         self.max_consecutive_failures=max_consecutive_failures
         self.max_steps=max_steps
         self.client=client

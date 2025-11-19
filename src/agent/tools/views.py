@@ -18,5 +18,7 @@ class Resource(SharedBaseModel):
     name:str = Field(...,description="the name of the server to access the resource from",examples=["ucd-mcp"])
     uri:str = Field(...,description="the URI of the resource to access",examples=["/resources/12345"])
 
-class Registry(SharedBaseModel):
-    name:str = Field(...,description="the keyword to search for in the MCP registry",examples=["filesystem","docker","sqlite"])
+class Search(SharedBaseModel):
+    name:str = Field(...,description="only the keyword of the server to search for in the MCP registry",examples=["filesystem","docker","github"])
+    limit:int = Field(10,description="Number of items per page (1-100)",gt=1,lt=100,example=10)
+    # cursor:str = Field(description="Pagination cursor",example="server-cursor-123")

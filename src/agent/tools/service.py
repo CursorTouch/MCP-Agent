@@ -1,5 +1,5 @@
 from src.mcp.types.registry import ListServersRequest,SpecificServerVersionRequest,ListServersResponse,SpecificServerVersionResponse
-from src.agent.tools.views import Done,Connect,Disconnect,Resource,Registry
+from src.agent.tools.views import Done,Connect,Disconnect,Resource,Search
 from src.mcp.registry.service import MCPRegistry
 from src.mcp.client import MCPClient
 from typing import cast, Any,Literal
@@ -40,12 +40,12 @@ async def disconnect_tool(name:str,**kwargs):
     await client.close_session(name.lower())
     return f'{name.lower()} now disconnected.'
 
-@Tool('Registry Tool', args_schema=Registry)
-async def registry_tool(name, **kwargs):
-    '''Install an MCP server from the official MCP Registry'''
+@Tool('Search Tool', args_schema=Search)
+async def search_tool(name:str,limit:int=10,**kwargs):
+    '''Search for MCP servers in the official MCP Registry'''
     client = cast(MCPClient, kwargs['client'])
     registry=cast(MCPRegistry,client.registry)
-    response:ListServersResponse=await registry.list_servers(ListServersRequest(search=name))
+    response:ListServersResponse=await registry.list_servers(ListServersRequest(search=name,limit=limit))
     if not response.servers:
         return f'No MCP servers found for {name}'
     return dedent('\n'.join([f'''
