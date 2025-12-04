@@ -1,4 +1,4 @@
-from src.messages.service import BaseMessage,SystemMessage,HumanMessage,AIMessage,ImageMessage
+from src.messages.service import BaseMessage,SystemMessage,HumanMessage,AIMessage,ImageMessage, ToolMessage
 
 __all__=[
     'BaseMessage',
@@ -6,4 +6,5 @@ __all__=[
     'HumanMessage',
     'ImageMessage',
     'AIMessage',
+    'ToolMessage'
 ]

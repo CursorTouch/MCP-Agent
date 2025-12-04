@@ -7,16 +7,12 @@ class Tool:
         self.description = description
         # Handle BaseModel subclass or instance; otherwise keep dict schema
         if isinstance(args_schema, type) and issubclass(args_schema, BaseModel):
-            self.model = args_schema
-            self.args_schema = self.preprocess_schema(self.model)
+            self.args_schema = self.preprocess_schema(args_schema)
         elif isinstance(args_schema, BaseModel):
-            self.model = args_schema.__class__
-            self.args_schema = self.preprocess_schema(self.model)
+            self.args_schema = self.preprocess_schema(args_schema.__class__)
         elif isinstance(args_schema, dict):
-            self.model = None
             self.args_schema = args_schema
         else:
-            self.model = None
             self.args_schema = None
         # Set function for non-decorator usage
         self.function = func

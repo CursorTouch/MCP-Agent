@@ -1,10 +1,11 @@
-from src.messages import BaseMessage, SystemMessage, AIMessage, HumanMessage, ImageMessage
-from google.genai.types import Part, Content, GenerateContentConfigDict,Modality
+from google.genai.types import Part, Content, GenerateContentConfigDict,Modality,ToolDict,FunctionDeclarationDict,FunctionCall
+from src.messages import BaseMessage, SystemMessage, AIMessage, HumanMessage, ImageMessage, ToolMessage
 from src.llms.views import ChatLLMResponse, ChatLLMUsage
 from google.genai.client import Client,DebugConfig
 from google.auth.credentials import Credentials
 from src.llms.base import BaseChatLLM
 from dataclasses import dataclass
+from src.tool.service import Tool
 from google.genai import types
 from pydantic import BaseModel
 import asyncio
@@ -40,6 +41,8 @@ class ChatGoogle(BaseChatLLM):
         self.location = location
         self.http_options = http_options
         self.debug_config = debug_config
+        self._client = None
+        self._async_client = None
         
     @property
     def provider(self) -> str:
@@ -51,27 +54,31 @@ class ChatGoogle(BaseChatLLM):
     
     @property
     def client(self) -> Client:
-        return Client(**{
-            "api_key": self.api_key,
-            "vertexai": self.vertexai,
-            "project": self.project,
-            "location": self.location,
-            "credentials": self.credentials,
-            "http_options": self.http_options,
-            "debug_config": self.debug_config
-        })
+        if self._client is None:
+            self._client = Client(**{
+                "api_key": self.api_key,
+                "vertexai": self.vertexai,
+                "project": self.project,
+                "location": self.location,
+                "credentials": self.credentials,
+                "http_options": self.http_options,
+                "debug_config": self.debug_config
+            })
+        return self._client
     
     @property
     def async_client(self) -> Client:
-        return Client(**{
-            "api_key": self.api_key,
-            "vertexai": self.vertexai,
-            "project": self.project,
-            "location": self.location,
-            "credentials": self.credentials,
-            "http_options": self.http_options,
-            "debug_config": self.debug_config
-        })
+        if self._async_client is None:
+            self._async_client = Client(**{
+                "api_key": self.api_key,
+                "vertexai": self.vertexai,
+                "project": self.project,
+                "location": self.location,
+                "credentials": self.credentials,
+                "http_options": self.http_options,
+                "debug_config": self.debug_config
+            })
+        return self._async_client
     
     def serialize_messages(self, messages: list[BaseMessage])-> tuple[str|None,list[dict]]:
         serialized = []
@@ -80,9 +87,12 @@ class ChatGoogle(BaseChatLLM):
             if isinstance(message, SystemMessage):
                 system_instruction = message.content
             elif isinstance(message, HumanMessage):
-                serialized.append(Content(role="user",parts=[Part(text=message.content)]))
+                serialized.append(Content(role="user",parts=[Part.from_text(text=message.content)]))
             elif isinstance(message, AIMessage):
-                serialized.append(Content(role="model",parts=[Part(text=message.content)]))
+                serialized.append(Content(role="model",parts=[Part.from_text(text=message.content)]))
+            elif isinstance(message, ToolMessage):
+                serialized.append(Content(role="model",parts=[Part.from_function_call(name=message.name,args=message.args)]))
+                serialized.append(Content(role="user",parts=[Part.from_function_response(name=message.name,response={"response":message.response})]))
             elif isinstance(message, ImageMessage):
                 message.scale_images(scale=0.7)
                 images=message.convert_images("bytes")
@@ -96,15 +106,18 @@ class ChatGoogle(BaseChatLLM):
                 raise ValueError(f"Unsupported message type: {type(message)}")
         return system_instruction, serialized
         
-    def invoke(self, messages: list[BaseMessage], structured_output: BaseModel | None = None) -> ChatLLMResponse:
+    def invoke(self,tools:list[Tool]=[], messages: list[BaseMessage]=[], structured_output: BaseModel | None = None) -> ChatLLMResponse:
         system_instruction, contents = self.serialize_messages(messages)
-        config: GenerateContentConfigDict = {
+        config=GenerateContentConfigDict({
             "temperature": self.temperature,
-            "system_instruction":system_instruction,
+            "system_instruction":system_instruction,    
             "response_mime_type": "application/json" if structured_output else "text/plain",
             "response_modalities": [Modality.TEXT],
             "response_json_schema":structured_output.model_json_schema() if structured_output else None
-        }
+        })
+        if tools:
+            config["tools"]= [ToolDict(function_declarations=[FunctionDeclarationDict(name=tool.name,description=tool.description,parameters_json_schema=tool.args_schema) for tool in tools])]
+
         completion =run_async(self.client.aio.models.generate_content(
             model=self.model,
             config=config,
@@ -112,8 +125,14 @@ class ChatGoogle(BaseChatLLM):
             ))
         if structured_output:
             content=structured_output.model_validate(completion.parsed)
-        else:
-            content=completion.text
+        elif getattr(completion, 'function_calls',None):
+            function_call = completion.function_calls[0]
+            content=ToolMessage(
+                name=function_call.name,
+                args=function_call.args
+            )
+        elif getattr(completion, 'text',None):
+            content=AIMessage(content=completion.text)
         return ChatLLMResponse(
             content=content,
             usage=ChatLLMUsage(
@@ -123,7 +142,7 @@ class ChatGoogle(BaseChatLLM):
             )
         )
     
-    async def ainvoke(self, messages: list[BaseMessage], structured_output: BaseModel | None = None) -> ChatLLMResponse:
+    async def ainvoke(self,tools:list[Tool]=[], messages: list[BaseMessage]=[], structured_output: BaseModel | None = None) -> ChatLLMResponse:
         system_instruction, contents = self.serialize_messages(messages)
         config: GenerateContentConfigDict = {
             "temperature": self.temperature,
@@ -132,15 +151,41 @@ class ChatGoogle(BaseChatLLM):
             "response_modalities": [Modality.TEXT],
             "response_json_schema":structured_output.model_json_schema() if structured_output else None
         }
-        completion =await self.async_client.aio.models.generate_content(
-            model=self.model,
-            config=config,
-            contents=contents
+        
+        try:
+            completion = await self.async_client.aio.models.generate_content(
+                model=self.model,
+                config=config,
+                contents=contents
             )
+        except Exception as e:
+            raise RuntimeError(f"Error calling Google GenAI API: {str(e)}") from e
+        
+        # Check if response has candidates
+        if not completion.candidates or len(completion.candidates) == 0:
+            error_msg = "Model returned empty response."
+            if hasattr(completion, 'prompt_feedback'):
+                error_msg += f" Prompt feedback: {completion.prompt_feedback}"
+            raise ValueError(error_msg)
+        
+        # Check if the first candidate has content
+        candidate = completion.candidates[0]
+        if not candidate.content or not candidate.content.parts:
+            error_msg = f"Model candidate has no content. Finish reason: {candidate.finish_reason}"
+            if hasattr(candidate, 'safety_ratings'):
+                error_msg += f", Safety ratings: {candidate.safety_ratings}"
+            raise ValueError(error_msg)
+        
         if structured_output:
             content=structured_output.model_validate(completion.parsed)
-        else:
-            content=completion.text
+        elif getattr(completion, 'function_calls',None):
+            function_call = completion.function_calls[0]
+            content=ToolMessage(
+                name=function_call.name,
+                arguments=function_call.args
+            )
+        elif getattr(completion, 'text',None):
+            content=AIMessage(content=completion.text)
         return ChatLLMResponse(
             content=content,
             usage=ChatLLMUsage(

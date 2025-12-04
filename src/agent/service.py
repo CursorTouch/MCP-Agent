@@ -1,120 +1,130 @@
-from src.mcp.types.tools import ToolResult,TextContent as ToolTextContent,ImageContent as ToolImageContent,Content as ToolContent
-from src.agent.tools import connect_tool,disconnect_tool,done_tool,search_tool,resource_tool
-from src.mcp.types.resources import ResourceResult,TextContent as ResourceTextContent
-from src.messages import AIMessage,HumanMessage,SystemMessage,ImageMessage
-from src.agent.utils import extract_llm_response
+from src.messages import SystemMessage,HumanMessage,AIMessage,ImageMessage
+from src.agent.tools.service import start_tool,stop_tool,switch_tool
+from src.mcp.types.tools import TextContent,ImageContent
+from src.agent.utils import json_preprocessor
 from src.agent.prompt.service import Prompt
-from src.agent.views import AgentResponse
-from src.agent.registry import Registry
 from src.llms.base import BaseChatLLM
 from src.mcp.client import MCPClient
-from rich.markdown import Markdown
-from rich.console import Console
-from typing import List,cast
-import logging
-
-logger=logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-logger.addHandler(logging.StreamHandler())
+from src.tool.service import Tool
+from src.agent.views import Thread
+from typing import Optional,Any
+from functools import partial
+import json
 
 class Agent:
-    def __init__(self,client:MCPClient,llm:BaseChatLLM,max_steps:int=10,max_consecutive_failures:int=3):
-        self.name="MCP Agent"
-        self.description="A MCP Agent that can use mutliple MCP Servers to perform tasks using their tools."
-        self.registry=Registry(tools=[connect_tool,disconnect_tool,done_tool,search_tool,resource_tool])
-        self.max_consecutive_failures=max_consecutive_failures
+    def __init__(self,mcp_client:MCPClient,llm:BaseChatLLM,max_steps:int=20):
+        self.current_thread:Optional[Thread]=None
+        self.tools=[start_tool,stop_tool,switch_tool]
+        self.mcp_tools:dict[str,Tool]={}
         self.max_steps=max_steps
-        self.console=Console()
-        self.client=client
+        self.threads:list[Thread]=[]
+        self.mcp_client=mcp_client
         self.llm=llm
 
-    async def ainvoke(self,query:str)->str:
-        messages=[]
-        agent_response=None
-        servers_info=self.client.get_servers_info()
-        try:
-            messages.append(HumanMessage(content=f"<User-Query>{query}</User-Query>"))
-            for steps in range(1,self.max_steps+1):
-                sessions=self.client.get_all_sessions()
-                await self.registry.add_tools_from_sessions(sessions=sessions)
-                system_message=SystemMessage(content=Prompt.system_prompt(**{
-                    'max_steps':self.max_steps,
-                    'registry':self.registry,
-                    'servers_info':servers_info
-                }))
-                for attempt in range(self.max_consecutive_failures):
-                    try:
-                        llm_response=await self.llm.ainvoke([system_message,*messages])
-                        response=extract_llm_response(llm_response.content)
-                        break
-                    except Exception as e:
-                        logger.error(f"Error in LLM invocation or response extraction: {e}")
-                        if attempt+1<self.max_consecutive_failures-1:
-                            continue
-                        logger.error(f"Max consecutive failures reached. Failed to get a valid response after {self.max_consecutive_failures} attempts.")
-                        agent_response=AgentResponse(is_success=False,response=f"Failed to get a valid response after {self.max_consecutive_failures} attempts.")
-                        break
-                
-                thought=response.get('thought','')
-                logger.info(f"Step {steps}")
-                logger.info(f"Thought: {response.get('thought','')}")
-                action_name=response.get('action_name','')
-                action_input=response.get('action_input',{})
-                messages.append(AIMessage(content=Prompt.action_prompt(thought=thought,action_name=action_name,action_input=action_input)))
-                action_result=await self.registry.aexecute(tool_name=action_name,**(action_input|{'client':self.client}))
-                if action_name.startswith("Done"):
-                    answer=action_result.content
-                    logger.info(f"Final Answer: {answer}\n")
-                    messages.append(HumanMessage(content=Prompt.answer_prompt(thought=thought,answer=answer)))
-                    await self.client.close_all_sessions()
-                    agent_response=AgentResponse(is_success=True,response=answer)
-                    break
-                else:
-                    logger.info(f"Action: {action_name}({', '.join([f'{k}={v}' for k,v in action_input.items()])})")
-                    if isinstance(action_result.content,ToolResult):
-                        texts,images=[],[]
-                        tool_result=action_result.content
-                        if isinstance(tool_result.content,list):
-                            contents=tool_result.content
-                            for content in contents:
-                                if isinstance(content,ToolTextContent):
-                                    texts.append(content.text)
-                                elif isinstance(content,ToolImageContent):
-                                    images.append(content.data)
-                                else:
-                                    # TODO handle other content types
-                                    logger.warning(f"Unsupported content type: {type(content)}")
-                                    pass
-                        elif isinstance(action_result,ResourceResult):
-                            contents=action_result.contents
-                            for content in contents:
-                                if isinstance(content,ResourceTextContent):
-                                    texts.append(content.text)
-                                else:
-                                    pass
-                        observation="\n".join(texts)
-                        if images:
-                            messages.append(ImageMessage(content=Prompt.observation_prompt(steps=steps,max_steps=self.max_steps,observation=observation),images=images))
-                        elif texts:
-                            messages.append(HumanMessage(content=Prompt.observation_prompt(steps=steps,max_steps=self.max_steps,observation=observation)))
+    async def llm_call(self):
+        if self.current_thread.server:
+            mcp_session=self.mcp_client.get_session(self.current_thread.server.lower())
+            self.mcp_tools={tool.name:Tool(
+                name=tool.name,
+                description=tool.description,
+                args_schema=tool.inputSchema,
+                func=partial(mcp_session.tools_call,tool.name)
+            ) for tool in await mcp_session.tools_list()}
+            tools=list(self.mcp_tools.values())
+        else:
+            tools=self.tools
+        system_prompt=Prompt.system(self.mcp_client,tools,self.current_thread,self.threads)
+        response=await self.llm.ainvoke(messages=[SystemMessage(content=system_prompt)]+self.current_thread.messages)
+        tool=json_preprocessor(response.content.content)
+        return tool
+    
+    async def tool_call(self,tool_name:str,tool_args:dict[str,Any]):
+        if self.current_thread.server:
+            self.current_thread.messages.append(AIMessage(content=json.dumps({"tool_name":tool_name,"tool_args":tool_args})))
+            if tool_name in self.mcp_tools:
+                try:
+                    tool_results=await self.mcp_tools[tool_name].ainvoke(**tool_args)
+                    images,texts=[],[]
+                    for tool_result in tool_results.content:
+                        if isinstance(tool_result,ImageContent):
+                            images.append(tool_result.data)
+                        elif isinstance(tool_result,TextContent):
+                            texts.append(tool_result.text)
+                        else:
+                            pass
+                    content="\n".join(texts)
+                    if images:
+                        self.current_thread.messages.append(ImageMessage(images=images,content=json.dumps({'tool_result':content})))
                     else:
-                        observation=action_result.content if action_result.is_success else action_result.error  
-                        messages.append(HumanMessage(content=Prompt.observation_prompt(steps=steps,max_steps=self.max_steps,observation=observation)))
-                    logger.info(f"Observation: {observation}\n")
-        except KeyboardInterrupt:
-            logger.info("Keyboard interrupt received. Exiting...")
-            agent_response=AgentResponse(is_success=False,response="Keyboard interrupt received. Exiting...")
-        except Exception as e:
-            logger.error(f"Error in agent operation: {e}")
-            agent_response=AgentResponse(is_success=False,response=f"Error in agent operation: {e}")
-        finally:
-            # Safely close all sessions before quitting just in case agent misses to disconnect
-            if self.client.get_all_sessions():
-                await self.client.close_all_sessions()
-        return agent_response
-        
+                        self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':content})))
+                    tool_result=content
+                except Exception as e:
+                    tool_result=f"Error calling tool {tool_name}: {str(e)}"
+                    self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
+            else:
+                tool_result=f"Tool {tool_name} not found"
+                self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
+        else:
+            match tool_name:
+                case "Start Tool":
+                    task=tool_args.get("subtask")
+                    server_name=tool_args.get("server_name")
+                    messages=[HumanMessage(content=task)]
+                    try:
+                        await self.mcp_client.create_session(server_name.lower())
+                        thread=Thread(task=task,server=server_name,status="started",messages=messages,result="",error="")
+                        self.threads.append(thread)
+                        self.current_thread=thread
+                        tool_result=f"Started Thread ID: {thread.id} for Subtask: {task} using {server_name} Server"
+                        self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
+                    except Exception as e:
+                        tool_result=f"Error starting thread: {str(e)}"
+                        self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
+                case "Stop Tool":
+                    try:
+                        id=tool_args.get("id")
+                        result=tool_args.get("result")
+                        error=tool_args.get("error")
+                        self.current_thread.status="completed" if result else "failed"
+                        self.current_thread.result=result
+                        self.current_thread.error=error
+                        if self.current_thread.server:
+                            await self.mcp_client.close_session(self.current_thread.server.lower())
+                        tool_result=result or error
+                        self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
+                        if self.current_thread.server:
+                            self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':f"Closed MCP session for server {self.current_thread.server}"})))
+                        else:
+                            self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
+                        # self.current_thread=None
+                    except Exception as e:
+                        tool_result=f"Error stopping thread: {str(e)}"
+                        self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
+                case "Switch Tool":
+                    try:
+                        id=tool_args.get("id")
+                        previous_thread=self.current_thread
+                        self.current_thread=self.threads.get(id)
+                        tool_result=f"Switched to Thread ID: {self.current_thread.id} from Thread ID: {previous_thread.id}"
+                        self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
+                    except Exception as e:
+                        tool_result=f"Error switching thread: {str(e)}"
+                        self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
+                case _:
+                    tool_result=f"Tool {tool_name} not found"
+                    self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
+        return tool_result
 
-    async def print_response(self,query:str)->None:
-        agent_response=await self.ainvoke(query)
-        self.console.print(Markdown(agent_response.response if agent_response.is_success else agent_response.error))
-        
+    async def invoke(self,task:str):
+        messages=[HumanMessage(content=task)]
+        self.current_thread=Thread(id="thread-main",task=task,status="started",messages=messages,server="",result="",error="")
+        self.threads.append(self.current_thread)
+        for _ in range(self.max_steps):
+            tool=await self.llm_call()
+            tool_name=tool.get("tool_name")
+            tool_args=tool.get("tool_args")
+            print(f"Tool Call: {tool_name}({', '.join([f'{key}={value}' for key,value in tool_args.items()])})")
+            tool_result=await self.tool_call(tool_name=tool_name,tool_args=tool_args)
+            print(f"Tool Result: {tool_result}")
+            if self.current_thread.id=="thread-main" and tool_name=="Stop Tool":
+                break

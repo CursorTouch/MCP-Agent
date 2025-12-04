@@ -1,12 +1,12 @@
 from typing import Literal, Union, List
 from pydantic import BaseModel, Field
 from PIL.Image import Image
+from typing import Any
 from io import BytesIO
 import base64
 
 class BaseMessage(BaseModel):
     role: Literal["system", "human", "ai"]
-    content: str
     
     class Config:
         arbitrary_types_allowed = True
@@ -102,3 +102,12 @@ class AIMessage(BaseMessage):
 
     def __repr__(self) -> str:
         return f"AIMessage(content={self.content})"
+    
+class ToolMessage(BaseMessage):
+    role:Literal["tool"]="tool"
+    name:str
+    args:dict
+    response:Any
+
+    def __repr__(self) -> str:
+        return f"ToolMessage(name={self.name}, args={self.args})"
