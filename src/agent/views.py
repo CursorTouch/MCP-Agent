@@ -12,6 +12,7 @@ class Thread:
     status: Literal["idle","progress","completed","started","stopped"]='idle'
     messages: list[BaseMessage] = field(default_factory=list)
     id: str = field(default_factory=lambda: f'thread-{uuid.uuid4().hex}')
+    parent_id: str|None=None
 
 @dataclass
 class Action:

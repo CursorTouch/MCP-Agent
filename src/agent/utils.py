@@ -17,4 +17,12 @@ def json_preprocessor(content: str) -> dict[str, dict[str, str]]:
             # Last resort: assume the entire content is JSON
             raw_json = content.strip()
     
-    return json.loads(raw_json)
+    try:
+        return json.loads(raw_json)
+    except json.JSONDecodeError:
+        # If there's extra data, try to decode just the valid part
+        try:
+            obj, _ = json.JSONDecoder().raw_decode(raw_json)
+            return obj
+        except Exception:
+            raise
