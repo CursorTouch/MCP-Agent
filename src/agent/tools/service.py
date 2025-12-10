@@ -65,7 +65,11 @@ async def stop_tool(agent:Any, id:str|None=None, result:str="", error:str="", **
         target_thread.error = error
         
         if target_thread.server:
-            await agent.mcp_client.close_session(target_thread.server.lower())
+            server_name = target_thread.server.lower()
+            await agent.mcp_client.close_session(server_name)
+            # Invalidate cache because the session object in the cached tools is now closed
+            if server_name in agent.mcp_server_tools:
+                del agent.mcp_server_tools[server_name]
             
         tool_result = result or error or "Task Stopped"
         stop_msg = f"Stopped Thread ID: {target_thread.id}\nResult: {tool_result}"

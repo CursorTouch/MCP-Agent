@@ -36,7 +36,7 @@ class Agent:
             
             # Check cache first to avoid re-fetching tools every step
             if server_name in self.mcp_server_tools:
-                mcp_tools = self.mcp_server_tools[server_name]
+                pass
             else:
                 mcp_session=self.mcp_client.get_session(server_name)
                 tools_list = await mcp_session.tools_list()
@@ -49,7 +49,7 @@ class Agent:
                 # Update cache
                 self.mcp_server_tools[server_name] = mcp_tools
                 
-            tools=list(mcp_tools.values())+list(self.agent_tools.values())
+            tools=list(self.mcp_server_tools[server_name].values())+list(self.agent_tools.values())
         else:
             tools=list(self.agent_tools.values())
         system_prompt=Prompt.system(self.mcp_client,tools,self.current_thread,list(self.threads.values()))
@@ -60,13 +60,13 @@ class Agent:
     async def tool_call(self,tool_name:str,tool_args:dict[str,Any]):
         self.current_thread.messages.append(AIMessage(content=json.dumps({"tool_name":tool_name,"tool_args":tool_args})))
         match tool_name:
-            case "Start Tool"|"Stop Tool"|"Switch Tool":
+            case "Start Tool"|"Switch Tool"|"Stop Tool":
                 tool_result = await self.agent_tools[tool_name].ainvoke(agent=self, **tool_args)
             case _:
-                mcp_tools=self.mcp_server_tools.get(self.current_thread.server.lower(),{})
-                if tool_name in mcp_tools:
+                current_mcp_server_tools=self.mcp_server_tools.get(self.current_thread.server.lower(),{})
+                if tool_name in current_mcp_server_tools:
                     try:
-                        tool=mcp_tools[tool_name]
+                        tool=current_mcp_server_tools[tool_name]
                         tool_results=await tool.ainvoke(**tool_args)
                         images,texts=[],[]
                         for tool_result in tool_results.content:
