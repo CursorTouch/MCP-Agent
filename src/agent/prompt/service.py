@@ -12,4 +12,10 @@ class Prompt:
     def system(mcp_client:MCPClient,tools:list[Tool],current_thread:Thread,threads:list[Thread]):
         template=Prompt.env.get_template("system.md")
         mcp_servers=mcp_client.get_servers_info()
-        return template.render(mcp_servers=mcp_servers,tools=tools,current_thread=current_thread,threads=threads)
+        
+        # HIERARCHICAL VISIBILITY implementation:
+        # Only show the Current Thread and its immediate Children.
+        # This hides the Parent thread (and its global goal) from the Child, preventing context leakage.
+        visible_threads = [current_thread] + [t for t in threads if t.parent_id == current_thread.id]
+        
+        return template.render(mcp_servers=mcp_servers,tools=tools,current_thread=current_thread,threads=visible_threads)

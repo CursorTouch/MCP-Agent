@@ -30,7 +30,7 @@ class Agent:
                 func=partial(mcp_session.tools_call,tool.name)
             ) for tool in await mcp_session.tools_list()}
             # Fix: Allow Stop Tool in child threads so they can finish
-            tools=list(self.mcp_tools.values())+[switch_tool, stop_tool]
+            tools=list(self.mcp_tools.values())+[start_tool, switch_tool, stop_tool]
         else:
             tools=[start_tool,stop_tool,switch_tool]
         system_prompt=Prompt.system(self.mcp_client,tools,self.current_thread,list(self.threads.values()))
