@@ -61,7 +61,8 @@ class Agent:
         self.current_thread.messages.append(AIMessage(content=json.dumps({"tool_name":tool_name,"tool_args":tool_args})))
         match tool_name:
             case "Start Tool"|"Switch Tool"|"Stop Tool":
-                tool_result = await self.agent_tools[tool_name].ainvoke(agent=self, **tool_args)
+                tool=self.agent_tools[tool_name]
+                tool_result = await tool.ainvoke(agent=self, **tool_args)
             case _:
                 current_mcp_server_tools=self.mcp_server_tools.get(self.current_thread.server.lower(),{})
                 if tool_name in current_mcp_server_tools:
