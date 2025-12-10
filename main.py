@@ -18,7 +18,8 @@ agent=Agent(mcp_client=client,llm=llm)
 
 async def main():
     task=input('Enter a task: ')
-    await agent.invoke(task=task)
+    result = await agent.invoke(task=task)
+    print(result)
 
 if __name__ == '__main__':
     import asyncio

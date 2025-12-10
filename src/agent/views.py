@@ -10,6 +10,7 @@ class Thread:
     result: str|None=None
     error: str|None=None
     status: Literal["idle","progress","completed","started","stopped"]='idle'
+    step_count: int = 0
     messages: list[BaseMessage] = field(default_factory=list)
     id: str = field(default_factory=lambda: f'thread-{uuid.uuid4().hex}')
     parent_id: str|None=None

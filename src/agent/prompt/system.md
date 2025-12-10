@@ -77,4 +77,37 @@ You MUST provide your response in the following **XML** format. Do NOT use JSON.
 </tool_call>
 ```
 
+## Examples
+
+### Scenario 1: User asks "Check the weather in NY using weather-server"
+**Correct Output:**
+```xml
+<tool_call>
+    <tool_name>Start Tool</tool_name>
+    <tool_args>
+        <subtask>Fetch weather for NY</subtask>
+        <server_name>weather-server</server_name>
+    </tool_args>
+```
+
+### Scenario 2: You have the answer "The weather is sunny" and want to reply to user
+**Correct Output:**
+```xml
+
+    <tool_name>Stop Tool</tool_name>
+    <tool_args>
+        <result>The weather is sunny.</result>
+    </tool_args>
+```
+
+### Scenario 3: You want to switch to another thread
+**Correct Output:**
+```xml
+
+    <tool_name>Switch Tool</tool_name>
+    <tool_args>
+        <thread_id>[thread_id]</thread_id>
+    </tool_args>
+```
+
 Your response should contain exactly **ONE** `tool_call` block. Any thinking or explanation should be outside the block.

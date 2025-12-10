@@ -1,5 +1,9 @@
 import re
 import json
+import logging
+
+logger=logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 def _infer_type(value: str):
     """Infers the data type of a string value."""
@@ -34,7 +38,7 @@ def xml_preprocessor(content: str) -> dict[str, any]:
         if '<tool_name>' in content and '<tool_args>' in content:
             raw_content = content
         else:
-            print(content)
+            logger.warning("No <tool_code> block found in response")
             raise ValueError("No <tool_code> block found in response")
     else:
         raw_content = block_match.group(1)
