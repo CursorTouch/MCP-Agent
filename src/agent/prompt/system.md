@@ -16,7 +16,7 @@ Once you create a new thread you will be switched to the new thread and will put
 
 Once a subtask is completed you will put the thread on status: `completed` and the system will automatically switch you back to the parent thread.
 - `Start Tool`: Create and switch to a new thread. The current thread moves to `progress` status. **IMPORTANT**: If this new thread depends on data from a previous step (e.g., "save THE weather data"), you MUST include that data explicitly in the `subtask` description (e.g., "Save this data to file: [DATA]"). Child threads do NOT inherit memory.
-- `Stop Tool`: Stop the current thread (mark as `completed` or `failed`) and automatically return to the parent thread.
+- `Stop Tool`: Stop the current thread (mark as `completed` or `failed`) and automatically return to the parent thread. **ESSENTIAL**: The `result` MUST be a comprehensive summary of findings or actions (e.g., "Found 5 files, created report.txt"), as it is the ONLY info surviving context pruning.
 - `Switch Tool`: Manually switch to any other thread by ID.
 
 You have access to the following tools:
@@ -93,21 +93,23 @@ You MUST provide your response in the following **XML** format. Do NOT use JSON.
 ### Scenario 2: You have the answer "The weather is sunny" and want to reply to user
 **Correct Output:**
 ```xml
-
+<tool_call>
     <tool_name>Stop Tool</tool_name>
     <tool_args>
         <result>The weather is sunny.</result>
     </tool_args>
+</tool_call>
 ```
 
 ### Scenario 3: You want to switch to another thread
 **Correct Output:**
 ```xml
-
+<tool_call>
     <tool_name>Switch Tool</tool_name>
     <tool_args>
         <thread_id>[thread_id]</thread_id>
     </tool_args>
+</tool_call>
 ```
 
 Your response should contain exactly **ONE** `tool_call` block. Any thinking or explanation should be outside the block.
