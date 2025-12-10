@@ -1,7 +1,7 @@
 from src.messages import SystemMessage,HumanMessage,AIMessage,ImageMessage
 from src.agent.tools.service import start_tool,stop_tool,switch_tool
 from src.mcp.types.tools import TextContent,ImageContent
-from src.agent.utils import json_preprocessor
+from src.agent.utils import xml_preprocessor
 from src.agent.prompt.service import Prompt
 from src.llms.base import BaseChatLLM
 from src.mcp.client import MCPClient
@@ -29,12 +29,13 @@ class Agent:
                 args_schema=tool.inputSchema,
                 func=partial(mcp_session.tools_call,tool.name)
             ) for tool in await mcp_session.tools_list()}
-            tools=list(self.mcp_tools.values())+[switch_tool]
+            # Fix: Allow Stop Tool in child threads so they can finish
+            tools=list(self.mcp_tools.values())+[switch_tool, stop_tool]
         else:
             tools=[start_tool,stop_tool,switch_tool]
         system_prompt=Prompt.system(self.mcp_client,tools,self.current_thread,list(self.threads.values()))
         response=await self.llm.ainvoke(messages=[SystemMessage(content=system_prompt)]+self.current_thread.messages)
-        tool=json_preprocessor(response.content.content)
+        tool=xml_preprocessor(response.content.content)
         return tool
     
     async def tool_call(self,tool_name:str,tool_args:dict[str,Any]):
@@ -69,7 +70,7 @@ class Agent:
                     if target_thread.server:
                         await self.mcp_client.close_session(target_thread.server.lower())
                         
-                    tool_result=result or error
+                    tool_result=result or error or "Task Stopped"
                     stop_msg = f"Stopped Thread ID: {target_thread.id}\nResult: {tool_result}"
                     if target_thread.server:
                         stop_msg += f"\nDisconnected from Server: {target_thread.server} Server"
@@ -132,11 +133,16 @@ class Agent:
         self.current_thread=Thread(id="thread-main",task=task,status="started",messages=messages,server="",result="",error="")
         self.threads[self.current_thread.id]=self.current_thread
         for _ in range(self.max_steps):
+            # Track which thread is active BEFORE the execution
+            current_thread_id_before = self.current_thread.id
+            
             tool=await self.llm_call()
             tool_name=tool.get("tool_name")
             tool_args=tool.get("tool_args")
             print(f"Tool Call: {tool_name}({', '.join([f'{key}={value}' for key,value in tool_args.items()])})")
             tool_result=await self.tool_call(tool_name=tool_name,tool_args=tool_args)
             print(f"Tool Result: {tool_result}")
-            if self.current_thread.id=="thread-main" and tool_name=="Stop Tool":
+            
+            # Break only if we were in the main thread AND called Stop Tool
+            if current_thread_id_before=="thread-main" and tool_name=="Stop Tool":
                 break

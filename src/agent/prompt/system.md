@@ -32,6 +32,12 @@ You have access to the following tools:
 - While inside a specific thread you can use the tools of that particular connected MCP server.
 - Only one tool can be called at a time.
 
+**TOOL USAGE GUIDELINES**:
+1. **Verify State First**: Before modifying any resource (editing a file, closing a todo task, deleting an item), you ALWAYs must "read" or "list" the resource first to confirm it exists and to obtain its valid ID or handle. **NEVER GUESS IDs.**
+2. **Strict Schema Compliance**: You must use exactly the arguments defined in the `Tool Args`. Do not invent new arguments.
+3. **Handle Errors Gracefully**: If a tool returns an error, analyze the error message. Do not simply retry the exact same command.
+4. **Choose the Right Server**: Read the MCP Server Descriptions carefully. Only connect to a server if its description matches your current subtask needs.
+
 Following are the available MCP servers (understand the capabilities of these MCP servers before using it):
 
 {% for server in mcp_servers %}
@@ -56,16 +62,16 @@ Following are the threads present in the process:
 
 Stopping the `thread-main` will allow the PROCESS to stop and tell the user about the result or the error of the process in solving the <task>.
 
-Provide your response in the following block format:
+Provide your response in the following XML format:
 
-```json
-{
-    "tool_name": "[Name of the tool to be used as it is written in the list of tools]",
-    "tool_args": {
-        "[argument name]": "[argument value]",
+```xml
+<tool_call>
+    <tool_name>[Name of the tool to be used]</tool_name>
+    <tool_args>
+        <[argument_name]>[argument_value]</[argument_name]>
         ...
-    }
-}
+    </tool_args>
+</tool_call>
 ```
 
-Your response should only be verbatim in the above mentioned block format. Any other response format will be rejected.
+Your response should contain exactly one tool call block. Any thinking or explanation should be outside the block.

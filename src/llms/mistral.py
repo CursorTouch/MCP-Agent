@@ -70,7 +70,7 @@ class ChatMistral(BaseChatLLM):
                 raise ValueError(f"Unsupported message type: {type(message)}")
         return serialized
     
-    def invoke(self, messages: list[BaseMessage],structured_output:BaseModel|None=None) -> str:
+    def invoke(self, messages: list[BaseMessage],structured_output:BaseModel|None=None) -> ChatLLMResponse:
         completion=self.client.chat.complete(
             model=self.model,
             messages=self.serialize_messages(messages),
@@ -90,20 +90,31 @@ class ChatMistral(BaseChatLLM):
             content=structured_output.model_validate_json(completion.choices[0].message.content)
             thinking=None
         else:
-            thinking=None
+            thinking_parts = []
+            content_parts = []
             ai_contents=completion.choices[0].message.content
+            
             if isinstance(ai_contents,str):
-                content=ai_contents
+                content_parts.append(ai_contents)
             elif isinstance(ai_contents,list):
                 for ai_content in ai_contents:
                     if isinstance(ai_content,TextChunk):
-                        content=ai_content.text
+                        content_parts.append(ai_content.text)
                     elif isinstance(ai_content,ThinkChunk):
-                        thinking=ai_content.thinking[0].text
+                        # Handle thinking whether it's a string or a list of chunks
+                        if isinstance(ai_content.thinking, str):
+                            thinking_parts.append(ai_content.thinking)
+                        elif isinstance(ai_content.thinking, list):
+                            for chunk in ai_content.thinking:
+                                if hasattr(chunk, 'text'):
+                                    thinking_parts.append(chunk.text)
                     else:
                         raise ValueError(f"Unsupported message type: {type(ai_content)}")
             else:
                 raise ValueError(f"Unsupported message type: {type(ai_contents)}")
+
+            content = AIMessage(content="".join(content_parts))
+            thinking = "".join(thinking_parts) if thinking_parts else None
 
         return ChatLLMResponse(
             thinking=thinking,
@@ -116,6 +127,59 @@ class ChatMistral(BaseChatLLM):
         )
 
     async def ainvoke(self, messages: list[BaseMessage],structured_output:BaseModel|None=None) -> ChatLLMResponse:
-        pass
+        completion=self.client.chat.complete(
+            model=self.model,
+            messages=self.serialize_messages(messages),
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            stream=False,
+            response_format=ResponseFormat(
+                json_schema=JSONSchema(
+                    name=structured_output.__class__.__name__,
+                    description="Model output structured as JSON schema",
+                    schema_definition=structured_output.model_json_schema()
+                ),
+                type="json_schema"
+            ) if structured_output else None
+        )
+        if structured_output:
+            content=structured_output.model_validate_json(completion.choices[0].message.content)
+            thinking=None
+        else:
+            thinking_parts = []
+            content_parts = []
+            ai_contents=completion.choices[0].message.content
+            
+            if isinstance(ai_contents,str):
+                content_parts.append(ai_contents)
+            elif isinstance(ai_contents,list):
+                for ai_content in ai_contents:
+                    if isinstance(ai_content,TextChunk):
+                        content_parts.append(ai_content.text)
+                    elif isinstance(ai_content,ThinkChunk):
+                        # Handle thinking whether it's a string or a list of chunks
+                        if isinstance(ai_content.thinking, str):
+                            thinking_parts.append(ai_content.thinking)
+                        elif isinstance(ai_content.thinking, list):
+                            for chunk in ai_content.thinking:
+                                if hasattr(chunk, 'text'):
+                                    thinking_parts.append(chunk.text)
+                    else:
+                        raise ValueError(f"Unsupported message type: {type(ai_content)}")
+            else:
+                raise ValueError(f"Unsupported message type: {type(ai_contents)}")
+
+            content = AIMessage(content="".join(content_parts))
+            thinking = "".join(thinking_parts) if thinking_parts else None
+
+        return ChatLLMResponse(
+            thinking=thinking,
+            content=content,
+            usage=ChatLLMUsage(
+                prompt_tokens=completion.usage.prompt_tokens,
+                completion_tokens=completion.usage.completion_tokens,
+                total_tokens=completion.usage.total_tokens
+            )
+        )
 
     
