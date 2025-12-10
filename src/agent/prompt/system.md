@@ -15,7 +15,7 @@ When you progress in the active thread and as you progress in solving the subtas
 Once you create a new thread you will be switched to the new thread and will put the previous thread on status: `progress` and will switch the new thread to status: `started`.
 
 Once a subtask is completed you will put the thread on status: `completed` and the system will automatically switch you back to the parent thread.
-- `Start Tool`: Create and switch to a new thread. The current thread moves to `progress` status.
+- `Start Tool`: Create and switch to a new thread. The current thread moves to `progress` status. **IMPORTANT**: If this new thread depends on data from a previous step (e.g., "save THE weather data"), you MUST include that data explicitly in the `subtask` description (e.g., "Save this data to file: [DATA]"). Child threads do NOT inherit memory.
 - `Stop Tool`: Stop the current thread (mark as `completed` or `failed`) and automatically return to the parent thread.
 - `Switch Tool`: Manually switch to any other thread by ID.
 

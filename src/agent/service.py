@@ -52,10 +52,10 @@ class Agent:
                     self.threads[thread.id]=thread
                     self.current_thread=thread
                     tool_result=f"Started Thread ID: {thread.id}\nSubtask: {task}\nConnected Server: {server_name} Server"
-                    self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
                 except Exception as e:
                     tool_result=f"Error starting thread: {str(e)}"
-                    self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
+                content=f"<tool_result>{tool_result}</tool_result>"
+                self.current_thread.messages.append(HumanMessage(content=content))
             case "Stop Tool":
                 try:
                     id=tool_args.get("id")
@@ -80,13 +80,16 @@ class Agent:
                         self.current_thread = parent_thread
                         self.current_thread.status = "started"
                         stop_msg += f"\nAuto-switched back to Parent Thread ID: {parent_thread.id}"
-                        self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':stop_msg})))
+                        content=f"<tool_result>{stop_msg}</tool_result>"
+                        self.current_thread.messages.append(HumanMessage(content=content))
                     else:
-                        target_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':stop_msg})))
+                        content=f"<tool_result>{stop_msg}</tool_result>"
+                        target_thread.messages.append(HumanMessage(content=content))
                         
                 except Exception as e:
                     tool_result=f"Error stopping thread: {str(e)}"
-                    self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
+                    content=f"<tool_result>{tool_result}</tool_result>"
+                    self.current_thread.messages.append(HumanMessage(content=content))
             case "Switch Tool":
                 try:
                     id=tool_args.get("id")
@@ -95,13 +98,12 @@ class Agent:
                     if next_thread:
                         self.current_thread=next_thread
                         tool_result=f"Switched to Thread ID: {self.current_thread.id} from Thread ID: {previous_thread.id}"
-                        self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
                     else:
                         tool_result=f"Error: Thread ID {id} not found"
-                        self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
                 except Exception as e:
                     tool_result=f"Error switching thread: {str(e)}"
-                    self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
+                content=f"<tool_result>{tool_result}</tool_result>"
+                self.current_thread.messages.append(HumanMessage(content=content))
             case _:
                 if tool_name in self.mcp_tools:
                     try:
@@ -116,16 +118,16 @@ class Agent:
                                 pass
                         content="\n".join(texts)
                         if images:
-                            self.current_thread.messages.append(ImageMessage(images=images,content=json.dumps({'tool_result':content})))
+                            self.current_thread.messages.append(ImageMessage(images=images,content=content))
                         else:
-                            self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':content})))
+                            self.current_thread.messages.append(HumanMessage(content=content))
                         tool_result=content
                     except Exception as e:
                         tool_result=f"Error calling tool {tool_name}: {str(e)}"
-                        self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
                 else:
                     tool_result=f"Tool {tool_name} not found"
-                    self.current_thread.messages.append(HumanMessage(content=json.dumps({'tool_result':tool_result})))
+                content=f"<tool_result>{tool_result}</tool_result>"
+                self.current_thread.messages.append(HumanMessage(content=content))
         return tool_result
 
     async def invoke(self,task:str):

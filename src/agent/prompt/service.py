@@ -7,7 +7,6 @@ from pathlib import Path
 
 class Prompt:
     env=Environment(loader=FileSystemLoader(Path(resources.files('src.agent').joinpath('prompt')).as_posix()))
-
     @staticmethod
     def system(mcp_client:MCPClient,tools:list[Tool],current_thread:Thread,threads:list[Thread]):
         template=Prompt.env.get_template("system.md")
