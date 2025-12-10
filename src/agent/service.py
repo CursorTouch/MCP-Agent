@@ -42,79 +42,11 @@ class Agent:
         self.current_thread.messages.append(AIMessage(content=json.dumps({"tool_name":tool_name,"tool_args":tool_args})))
         match tool_name:
             case "Start Tool":
-                task=tool_args.get("subtask")
-                server_name=tool_args.get("server_name")
-                messages=[HumanMessage(content=task)]
-                # Capture parent thread to append result to IT, not the child
-                parent_thread = self.current_thread
-                try:
-                    await self.mcp_client.create_session(server_name.lower())
-                    
-                    # Create the new thread
-                    thread=Thread(task=task,server=server_name,status="started",messages=messages,result="",error="",parent_id=self.current_thread.id)
-                    self.threads[thread.id]=thread
-                    
-                    # Update Parent status
-                    parent_thread.status="progress"
-                    
-                    # Switch context to Child
-                    self.current_thread=thread
-                    
-                    tool_result=f"Started Thread ID: {thread.id}\nSubtask: {task}\nConnected Server: {server_name} Server"
-                except Exception as e:
-                    tool_result=f"Error starting thread: {str(e)}"
-                
-                # Append result to PARENT (the one who called the tool)
-                content=f"<tool_result>{tool_result}</tool_result>"
-                parent_thread.messages.append(HumanMessage(content=content))
+                tool_result = await start_tool.ainvoke(agent=self, **tool_args)
             case "Stop Tool":
-                try:
-                    id=tool_args.get("id")
-                    target_thread=self.threads.get(id) if id else self.current_thread
-                    
-                    result=tool_args.get("result")
-                    error=tool_args.get("error")
-                    target_thread.status="completed" if result else "failed"
-                    target_thread.result=result
-                    target_thread.error=error
-                    
-                    if target_thread.server:
-                        await self.mcp_client.close_session(target_thread.server.lower())
-                        
-                    tool_result=result or error or "Task Stopped"
-                    stop_msg = f"Stopped Thread ID: {target_thread.id}\nResult: {tool_result}"
-                    if target_thread.server:
-                        stop_msg += f"\nDisconnected from Server: {target_thread.server} Server"
-
-                    if target_thread.parent_id and target_thread.parent_id in self.threads:
-                        parent_thread = self.threads[target_thread.parent_id]
-                        self.current_thread = parent_thread
-                        self.current_thread.status = "started"
-                        stop_msg += f"\nAuto-switched back to Parent Thread ID: {parent_thread.id}"
-                        content=f"<tool_result>{stop_msg}</tool_result>"
-                        self.current_thread.messages.append(HumanMessage(content=content))
-                    else:
-                        content=f"<tool_result>{stop_msg}</tool_result>"
-                        target_thread.messages.append(HumanMessage(content=content))
-                        
-                except Exception as e:
-                    tool_result=f"Error stopping thread: {str(e)}"
-                    content=f"<tool_result>{tool_result}</tool_result>"
-                    self.current_thread.messages.append(HumanMessage(content=content))
+                tool_result = await stop_tool.ainvoke(agent=self, **tool_args)
             case "Switch Tool":
-                try:
-                    id=tool_args.get("id")
-                    previous_thread=self.current_thread
-                    next_thread=self.threads.get(id)
-                    if next_thread:
-                        self.current_thread=next_thread
-                        tool_result=f"Switched to Thread ID: {self.current_thread.id} from Thread ID: {previous_thread.id}"
-                    else:
-                        tool_result=f"Error: Thread ID {id} not found"
-                except Exception as e:
-                    tool_result=f"Error switching thread: {str(e)}"
-                content=f"<tool_result>{tool_result}</tool_result>"
-                self.current_thread.messages.append(HumanMessage(content=content))
+                tool_result = await switch_tool.ainvoke(agent=self, **tool_args)
             case _:
                 if tool_name in self.mcp_tools:
                     try:
