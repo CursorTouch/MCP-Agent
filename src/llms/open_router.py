@@ -95,7 +95,7 @@ class ChatOpenRouter(BaseChatLLM):
                 )
             ) if structured_output else None
         )
-        content=completion.choices[0].message.content
+        content=AIMessage(content=completion.choices[0].message.content)
         return ChatLLMResponse(
             content=content,
             usage=ChatLLMUsage(
@@ -119,7 +119,7 @@ class ChatOpenRouter(BaseChatLLM):
                 )
             ) if structured_output else None
         )
-        content=completion.choices[0].message.content
+        content=AIMessage(content=completion.choices[0].message.content)
         return ChatLLMResponse(
             content=content,
             usage=ChatLLMUsage(

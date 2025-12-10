@@ -56,7 +56,7 @@ class ChatOllama(BaseChatLLM):
         if structured_output:
             content=structured_output.model_validate_json(completion.message.content)
         else:
-            content=completion.message.content
+            content=AIMessage(content=completion.message.content)
         return ChatLLMResponse(
             content=content,
             usage=ChatLLMUsage(
@@ -75,7 +75,7 @@ class ChatOllama(BaseChatLLM):
         if structured_output:
             content=structured_output.model_validate_json(completion.message.content)
         else:
-            content=completion.message.content
+            content=AIMessage(content=completion.message.content)
         return ChatLLMResponse(
             content=content,
             usage=ChatLLMUsage(

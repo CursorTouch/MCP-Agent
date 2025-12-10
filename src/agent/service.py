@@ -45,17 +45,28 @@ class Agent:
                 task=tool_args.get("subtask")
                 server_name=tool_args.get("server_name")
                 messages=[HumanMessage(content=task)]
+                # Capture parent thread to append result to IT, not the child
+                parent_thread = self.current_thread
                 try:
                     await self.mcp_client.create_session(server_name.lower())
-                    self.current_thread.status="progress"
+                    
+                    # Create the new thread
                     thread=Thread(task=task,server=server_name,status="started",messages=messages,result="",error="",parent_id=self.current_thread.id)
                     self.threads[thread.id]=thread
+                    
+                    # Update Parent status
+                    parent_thread.status="progress"
+                    
+                    # Switch context to Child
                     self.current_thread=thread
+                    
                     tool_result=f"Started Thread ID: {thread.id}\nSubtask: {task}\nConnected Server: {server_name} Server"
                 except Exception as e:
                     tool_result=f"Error starting thread: {str(e)}"
+                
+                # Append result to PARENT (the one who called the tool)
                 content=f"<tool_result>{tool_result}</tool_result>"
-                self.current_thread.messages.append(HumanMessage(content=content))
+                parent_thread.messages.append(HumanMessage(content=content))
             case "Stop Tool":
                 try:
                     id=tool_args.get("id")

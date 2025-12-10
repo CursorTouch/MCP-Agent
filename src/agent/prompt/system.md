@@ -38,6 +38,7 @@ You have access to the following tools:
 3. **Handle Errors Gracefully**: If a tool returns an error, analyze the error message. Do not simply retry the exact same command.
 4. **Choose the Right Server**: Read the MCP Server Descriptions carefully. Only connect to a server if its description matches your current subtask needs.
 5. **Strict Scope Compliance**: Focus ONLY on the `subtask` of the current ACTIVE thread. Do not attempt to complete future steps described in the Parent Thread's task. If the subtask is "fetch data", JUST fetch it. Do not "save" or "process" it unless the subtask explicitly asks for it.
+6. **Atomic Decomposition**: Prefer creating focused, single-purpose threads. For composite tasks (e.g. "Fetch X and Save to Y"), split them: Create Thread 1 to "Fetch X", get the result, THEN create Thread 2 to "Save [Data] to Y". This ensures better error handling and state management.
 
 Following are the available MCP servers (understand the capabilities of these MCP servers before using it):
 
@@ -63,7 +64,8 @@ Following are the threads visible to you (Current Thread + Children):
 
 Stopping the `thread-main` will allow the PROCESS to stop and tell the user about the result or the error of the process in solving the <task>.
 
-Provide your response in the following XML format:
+**CRITICAL: OUTPUT FORMAT**
+You MUST provide your response in the following **XML** format. Do NOT use JSON.
 
 ```xml
 <tool_call>
@@ -75,4 +77,4 @@ Provide your response in the following XML format:
 </tool_call>
 ```
 
-Your response should contain exactly one tool call block. Any thinking or explanation should be outside the block.
+Your response should contain exactly **ONE** `tool_call` block. Any thinking or explanation should be outside the block.
