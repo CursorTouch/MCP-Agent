@@ -41,7 +41,9 @@
 The **MCP Agent** implements a unique **"Virtual CPU"** architecture for cognitive tasks.
 
 - **Logical Threads**: Unlike operating system threads that run in parallel on physical cores, our "Threads" are **logical execution contexts**. They isolate the conversation history and state for specific subtasks. This prevents **Context Pollution**, where an LLM gets confused by too much instruction history from unrelated tasks.
+- **Hierarchical Visibility (Virtual Memory)**: The agent implements strict **Scope Restriction**. A Child Thread cannot see its Parent's history or its Siblings' existence. It only operates within its specific subtask. This mirrors **Virtual Memory isolation** in OS processes, ensuring stability and focus.
 - **Context Switching**: The Agent acts as a scheduler. When it switches tools or tasks, it performs a "context switch," saving the state of the current thread and loading the new one. This allows it to "pause" a complex high-level plan, dive deep into a specific detail (like searching a file), and then return to the main plan with the answer—just like a CPU handling an interrupt.
+- **Strict Manager-Worker Model**: Only the **Parent Thread** (the Manager) can call the `Switch Tool` to multitask between its children. Child Threads (Workers) are "sandboxed" and must simply complete their assigned subtask and `Stop Tool`, preventing them from jumping into unrelated workflows.
 - **Resiliency**: If a sub-thread crashes or gets stuck (e.g., a tool failure), the parent thread can catch the error and decide to retry or try a different approach, preventing the entire agent from crashing.
 
 ## 🚀 Getting Started

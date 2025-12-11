@@ -141,8 +141,9 @@ class Agent:
                         logger.info(f"Subtask: {self.current_thread.task}")
                         logger.info(f"Connected to: {self.current_thread.server}")
                     case "Switch Tool":
-                        logger.info(f"🔄 Switching to:")
-                        logger.info(f"Thread ID: {self.current_thread.id}")
+                        logger.info(f"🔄 Switching:")
+                        logger.info(f"From Thread ID: {current_thread_id_before}")
+                        logger.info(f"To Thread ID: {self.current_thread.id}")
                     case "Stop Tool":
                         logger.info(f"🛑 Stopping:")
                         logger.info(f"Thread ID: {current_thread_id_before}")
