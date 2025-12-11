@@ -104,6 +104,11 @@ class Agent:
         messages=[HumanMessage(content=task)]
         self.current_thread=Thread(id="thread-main",task=task,status="started",messages=messages,server="",result="",error="")
         self.threads[self.current_thread.id]=self.current_thread
+
+        logger.info(f"🚀 Starting:")
+        logger.info(f"Thread ID: {self.current_thread.id}")
+        logger.info(f"Main Task: {self.current_thread.task}")
+        print()
         
         global_steps = 0
         while global_steps < self.max_global_steps:
@@ -122,18 +127,33 @@ class Agent:
             
             # Track which thread is active BEFORE the execution
             current_thread_id_before = self.current_thread.id
+            current_thread_server_before = self.current_thread.server
             
             try:
                 decision=await self.llm_call()
-                thought=decision.get("thought")
                 tool_name=decision.get("tool_name")
                 tool_args=decision.get("tool_args")
-
-                logger.info(f"🤔 Thought: {thought}")
-                logger.info(f"🛠️ Tool Call: {tool_name}({', '.join([f'{key}={value}' for key,value in tool_args.items()])})")
                 tool_result=await self.tool_call(tool_name=tool_name,tool_args=tool_args)
-                logger.info(f"📃 Tool Result: {shorten(tool_result, width=500, placeholder='...')}")
-                
+                match tool_name:
+                    case "Start Tool":
+                        logger.info(f"🚀 Starting:")
+                        logger.info(f"Thread ID: {self.current_thread.id}")
+                        logger.info(f"Subtask: {self.current_thread.task}")
+                        logger.info(f"Connected to: {self.current_thread.server}")
+                    case "Switch Tool":
+                        logger.info(f"🔄 Switching to:")
+                        logger.info(f"Thread ID: {self.current_thread.id}")
+                    case "Stop Tool":
+                        logger.info(f"🛑 Stopping:")
+                        logger.info(f"Thread ID: {current_thread_id_before}")
+                        if current_thread_server_before:
+                            logger.info(f"Disconnected from: {current_thread_server_before}")
+                    case _:
+                        thought=decision.get("thought")
+                        logger.info(f"🤔 Thought: {thought}")
+                        logger.info(f"🛠️ Tool Call: {tool_name}({', '.join([f'{key}={value}' for key,value in tool_args.items()])})")
+                        logger.info(f"📃 Tool Result: {shorten(tool_result, width=500, placeholder='...')}")
+                print()
                 # Break only if we were in the main thread AND called Stop Tool
                 if current_thread_id_before=="thread-main" and tool_name=="Stop Tool":
                     return tool_result

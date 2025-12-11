@@ -60,14 +60,17 @@ Following are the threads visible to you (Current Thread + Children):
 
 {% for thread in threads %}
 - Thread ID: {{ thread.id }}
-- Thread Subtask: {{ thread.task }} {% if thread.id == current_thread.id %} (ACTIVE) {% endif %}
-- Thread Status: {{ thread.status }}
+    - Thread Subtask: {{ thread.task }} {% if thread.id == current_thread.id %} (ACTIVE THREAD) {% endif %}
+    - Thread Status: {{ thread.status }}
 {% if thread.result %}
-- Thread Result: {{ thread.result }}
+    - Thread Result: {{ thread.result }}
 {% endif %}
 {% if thread.error %}
-- Thread Error: {{ thread.error }}
-{% endif %}    
+    - Thread Error: {{ thread.error }}
+{% endif %}
+{% if thread.parent_id %}
+    - Parent Thread ID: {{ thread.parent_id }}
+{% endif %}
 {% endfor %}
 
 Stopping the `thread-main` will allow the PROCESS to stop and tell the user about the result or the error of the process in solving the <task>.
