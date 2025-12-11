@@ -32,8 +32,8 @@ class Agent:
         self.mcp_server_tools:dict[str,dict[str,Tool]]={}
 
     async def llm_call(self):
-        if self.current_thread.server:
-            server_name = self.current_thread.server.lower()
+        if self.current_thread.mcp_server:
+            server_name = self.current_thread.mcp_server.lower()
             
             # Check cache first to avoid re-fetching tools every step
             if server_name in self.mcp_server_tools:
@@ -72,7 +72,7 @@ class Agent:
                 tool=self.agent_tools[tool_name]
                 tool_result = await tool.ainvoke(agent=self, **tool_args)
             case _:
-                current_mcp_server_tools=self.mcp_server_tools.get(self.current_thread.server.lower(),{})
+                current_mcp_server_tools=self.mcp_server_tools.get(self.current_thread.mcp_server.lower(),{})
                 if tool_name in current_mcp_server_tools:
                     try:
                         tool=current_mcp_server_tools[tool_name]
@@ -102,7 +102,7 @@ class Agent:
 
     async def invoke(self,task:str):
         messages=[HumanMessage(content=task)]
-        self.current_thread=Thread(id="thread-main",task=task,status="started",messages=messages,server="", success="",error="")
+        self.current_thread=Thread(id="thread-main",task=task,status="started",messages=messages, mcp_server="", success="",error="")
         self.threads[self.current_thread.id]=self.current_thread
 
         logger.info(f"▶️  Starting Thread:")
@@ -127,7 +127,7 @@ class Agent:
             
             # Track which thread is active BEFORE the execution
             current_thread_id_before = self.current_thread.id
-            current_thread_server_before = self.current_thread.server
+            current_thread_mcp_server_before = self.current_thread.mcp_server
             
             try:
                 decision=await self.llm_call()
@@ -139,15 +139,15 @@ class Agent:
                         logger.info(f"▶️  Starting Thread:")
                         logger.info(f"🧵 Thread ID: {self.current_thread.id}")
                         logger.info(f"📌 Subtask: {self.current_thread.task}")
-                        logger.info(f"🔌 Connected to: {self.current_thread.server}")
+                        logger.info(f"🔌 Connected to: {self.current_thread.mcp_server}")
                     case "Switch Tool":
                         logger.info(f"🔄  Switching Thread:")
                         logger.info(f"From 🧵 Thread ID: {current_thread_id_before}")
-                        if current_thread_server_before!=self.current_thread.server:
-                            logger.info(f"🔌 Disconnecting from: {current_thread_server_before}")
+                        if current_thread_mcp_server_before!=self.current_thread.mcp_server:
+                            logger.info(f"🔌 Disconnecting from: {current_thread_mcp_server_before}")
                         logger.info(f"To 🧵 Thread ID: {self.current_thread.id}")
-                        if self.current_thread.server!=current_thread_server_before:
-                            logger.info(f"🔌 Connecting to: {self.current_thread.server}")
+                        if self.current_thread.mcp_server!=current_thread_mcp_server_before:
+                            logger.info(f"🔌 Connecting to: {self.current_thread.mcp_server}")
                     case "Stop Tool":
                         logger.info(f"⏹️  Stopping Thread:")
                         logger.info(f"🧵 Thread ID: {current_thread_id_before}")
@@ -155,8 +155,8 @@ class Agent:
                             logger.info(f"❌ Error: {tool_args.get('error')}")
                         else:
                             logger.info(f"✅ Success: {tool_args.get('success')}")
-                        if current_thread_server_before:
-                            logger.info(f"🔌 Disconnected from: {current_thread_server_before}")
+                        if current_thread_mcp_server_before:
+                            logger.info(f"🔌 Disconnected from: {current_thread_mcp_server_before}")
                     case _:
                         thought=decision.get("thought")
                         logger.info(f"🧠 Thought: {thought}")

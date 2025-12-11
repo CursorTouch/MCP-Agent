@@ -18,7 +18,7 @@ async def start_tool(agent:Any, subtask:str, server_name:str, **kwargs):
         await agent.mcp_client.create_session(server_name.lower())
         
         # Create the new thread
-        thread = Thread(task=task, server=server_name, status="started", messages=messages, result="", error="", parent_id=agent.current_thread.id)
+        thread = Thread(task=task, mcp_server=server_name, status="started", messages=messages, success="", error="", parent_id=agent.current_thread.id)
         agent.threads[thread.id] = thread
         
         # Update Parent status
@@ -45,8 +45,8 @@ async def switch_tool(agent:Any, id:str, **kwargs):
         
         if next_thread:
             # MCP Session Management Logic
-            previous_server = previous_thread.server.lower() if previous_thread.server else None
-            next_server = next_thread.server.lower() if next_thread.server else None
+            previous_server = previous_thread.mcp_server.lower() if previous_thread.mcp_server else None
+            next_server = next_thread.mcp_server.lower() if next_thread.mcp_server else None
             
             connection_info = ""
             
@@ -99,8 +99,8 @@ async def stop_tool(agent:Any, id:str|None=None, success:str="", error:str="", *
         target_thread.success = success
         target_thread.error = error
         
-        if target_thread.server:
-            server_name = target_thread.server.lower()
+        if target_thread.mcp_server:
+            server_name = target_thread.mcp_server.lower()
             await agent.mcp_client.close_session(server_name)
             # Invalidate cache because the session object in the cached tools is now closed
             if server_name in agent.mcp_server_tools:
@@ -108,8 +108,8 @@ async def stop_tool(agent:Any, id:str|None=None, success:str="", error:str="", *
             
         tool_result = success or error or "Task Stopped"
         stop_msg = f"Stopped Thread ID: {target_thread.id}\nResult: {tool_result}"
-        if target_thread.server:
-            stop_msg += f"\nDisconnected from Server: {target_thread.server} Server"
+        if target_thread.mcp_server:
+            stop_msg += f"\nDisconnected from Server: {target_thread.mcp_server} Server"
 
         if target_thread.parent_id and target_thread.parent_id in agent.threads:
             parent_thread = agent.threads[target_thread.parent_id]

@@ -6,7 +6,7 @@ import uuid
 @dataclass
 class Thread:
     task: str=''
-    server:str=''
+    mcp_server:str=''
     success: str|None=None
     error: str|None=None
     status: Literal["idle","progress","completed","started","stopped"]='idle'
