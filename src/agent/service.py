@@ -9,6 +9,7 @@ from src.tool.service import Tool
 from src.agent.views import Thread
 from typing import Optional,Any
 from functools import partial
+from textwrap import shorten
 import logging
 import json
 
@@ -122,18 +123,28 @@ class Agent:
             # Track which thread is active BEFORE the execution
             current_thread_id_before = self.current_thread.id
             
-            decision=await self.llm_call()
-            thought=decision.get("thought")
-            tool_name=decision.get("tool_name")
-            tool_args=decision.get("tool_args")
+            try:
+                decision=await self.llm_call()
+                thought=decision.get("thought")
+                tool_name=decision.get("tool_name")
+                tool_args=decision.get("tool_args")
 
-            logger.info(f"🤔 Thought: {thought}")
-            logger.info(f"🛠️ Tool Call: {tool_name}({', '.join([f'{key}={value}' for key,value in tool_args.items()])})")
-            tool_result=await self.tool_call(tool_name=tool_name,tool_args=tool_args)
-            logger.info(f"📃 Tool Result: {tool_result}")
-            
-            # Break only if we were in the main thread AND called Stop Tool
-            if current_thread_id_before=="thread-main" and tool_name=="Stop Tool":
-                return tool_result
+                logger.info(f"🤔 Thought: {thought}")
+                logger.info(f"🛠️ Tool Call: {tool_name}({', '.join([f'{key}={value}' for key,value in tool_args.items()])})")
+                tool_result=await self.tool_call(tool_name=tool_name,tool_args=tool_args)
+                logger.info(f"📃 Tool Result: {shorten(tool_result, width=500, placeholder='...')}")
+                
+                # Break only if we were in the main thread AND called Stop Tool
+                if current_thread_id_before=="thread-main" and tool_name=="Stop Tool":
+                    return tool_result
+            except Exception as e:
+                logger.error(f"Crash in Thread {self.current_thread.id}: {e}")
+                error_msg = f"Thread Execution Failed: {str(e)}"
+                # Force stop the crashing thread, allowing parent to recover
+                stop_result = await self.tool_call("Stop Tool", {"error": error_msg})
+                
+                # If Main Thread crashed, we can't recover
+                if current_thread_id_before == "thread-main":
+                     return f"Critical Agent Failure: {stop_result}"
         
         return "Max global steps exceeded."
