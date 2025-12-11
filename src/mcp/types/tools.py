@@ -1,17 +1,13 @@
 from src.mcp.types.resources import TextContent as ResourceTextContent, BinaryContent as ResourceBinaryContent
-from pydantic import BaseModel,ConfigDict
-from typing import Optional,Any,Union
-
-Content = Union['TextContent', 'ImageContent', 'AudioContent', 'EmbeddedResource']
+from typing import Optional,Any
+from pydantic import BaseModel, ConfigDict
 
 class Tool(BaseModel):
     name: str
-    description: str
+    description: Optional[str]=None
     inputSchema: dict[str,Any]
     outputSchema: Optional[dict[str,Any]]=None
     annotations: Optional['Annotations']=None
-
-    model_config=ConfigDict(extra='allow')
 
 
 class ToolRequest(BaseModel):
@@ -37,7 +33,7 @@ class EmbeddedResource(BaseModel):
     resource: ResourceTextContent | ResourceBinaryContent
 
 class ToolResult(BaseModel):
-    content: list[Content]
+    content: list[TextContent | ImageContent | AudioContent | EmbeddedResource]
     isError: bool=False
     structuredContent: Optional[dict[str,Any]]=None
 
@@ -47,3 +43,14 @@ class Annotations(BaseModel):
     destructiveHint: Optional[bool]=None
     idempotentHint: Optional[bool]=None
     openWorldHint: Optional[bool]=None
+
+# Request Types
+class ToolsListRequest(BaseModel):
+    cursor: Optional[str]=None
+    model_config = ConfigDict(extra="allow")
+
+# Result Types
+class ToolsListResult(BaseModel):
+    tools: list[Tool]
+    nextCursor: Optional[str]=None
+    model_config = ConfigDict(extra="allow")

@@ -1,8 +1,8 @@
 from src.mcp.client.utils import create_transport_from_server_config
 from src.mcp.types.elicitation import ElicitationFn
 from src.mcp.registry.service import MCPRegistry
-from src.mcp.types.sampling import SamplingFn
 from src.mcp.client.session import MCPSession
+from src.mcp.types.sampling import SamplingFn
 from src.mcp.types.roots import ListRootsFn
 from src.mcp.types.info import ClientInfo
 from typing import Callable, Optional
@@ -12,7 +12,7 @@ import json
 
 class MCPClient:
     client_info=ClientInfo(name="MCP Client",version="0.1.0")
-    def __init__(self,config:dict[str,dict[str,Any]]={},sampling_callback:Optional[SamplingFn]=None,elicitation_callback:Optional[ElicitationFn]=None,list_roots_callback:Optional[ListRootsFn]=None)->None:
+    def __init__(self,config:dict[str,dict[str,Any]]={},sampling_callback:Optional[SamplingFn]=None,elicitation_callback:Optional[ElicitationFn]=None,list_roots_callback:Optional[ListRootsFn]=None,logging_callback:Optional[Callable]=None)->None:
         self.servers=config.get("mcpServers",{})
         self.sampling_callback=sampling_callback
         self.list_roots_callback=list_roots_callback
@@ -100,6 +100,10 @@ class MCPClient:
         if not self.is_connected(name):
             raise ValueError(f"Session {name} not found")
         return self.sessions.get(name)
+    
+    def get_all_sessions(self)->dict[str,MCPSession]:
+        '''Get all sessions'''
+        return self.sessions
     
     async def close_session(self,name:str)->None:
         '''Close a session'''

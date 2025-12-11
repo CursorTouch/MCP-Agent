@@ -1,6 +1,7 @@
 from src.messages import SystemMessage,HumanMessage,AIMessage,ImageMessage
 from src.process.tools.service import start_tool,stop_tool,switch_tool
-from src.mcp.types.tools import TextContent,ImageContent
+from src.mcp.types.tools import TextContent,ImageContent,ToolRequest
+from src.mcp.client.session import MCPSession
 from src.process.utils import xml_preprocessor
 from src.process.prompt.service import Prompt
 from src.llms.base import BaseChatLLM
@@ -12,6 +13,7 @@ from functools import partial
 from textwrap import shorten
 import logging
 import json
+import asyncio
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -52,8 +54,8 @@ class Process:
                     name=tool.name,
                     description=tool.description,
                     args_schema=tool.inputSchema,
-                    func=partial(mcp_session.tools_call,tool.name)
-                ) for tool in tools_list}
+                    func=partial(lambda session,tool_name,**kwargs: session.tools_call(ToolRequest(name=tool_name,arguments=kwargs)), mcp_session, tool.name)
+                ) for tool in tools_list.tools}
                 # Update cache
                 self.mcp_server_tools[server_name] = mcp_tools
                 
@@ -101,79 +103,84 @@ class Process:
         return tool_result
 
     async def invoke(self,task:str):
-        messages=[HumanMessage(content=task)]
-        self.current_thread=Thread(id="thread-main",task=task,status="started",messages=messages, mcp_server="", success="",error="")
-        self.threads[self.current_thread.id]=self.current_thread
+        try:
+            messages=[HumanMessage(content=task)]
+            self.current_thread=Thread(id="thread-main",task=task,status="started",messages=messages, mcp_server="", success="",error="")
+            self.threads[self.current_thread.id]=self.current_thread
 
-        logger.info(f"▶️  Starting Thread:")
-        logger.info(f"🧵 Thread ID: {self.current_thread.id}")
-        logger.info(f"🎯 Main Task: {self.current_thread.task}")
-        print()
-        
-        global_steps = 0
-        while global_steps < self.max_global_steps:
-            global_steps += 1
+            logger.info(f"▶️  Starting Thread:")
+            logger.info(f"🧵 Thread ID: {self.current_thread.id}")
+            logger.info(f"🎯 Main Task: {self.current_thread.task}")
+            print()
             
-            # Check Per-Thread Step Limit
-            if self.current_thread.step_count >= self.max_thread_steps:
-                logger.warning(f"Thread {self.current_thread.id} exceeded max steps ({self.max_thread_steps}). Forcing stop.")
-                # Force stop the thread
-                await self.tool_call("Stop Tool", {"error": "Max thread steps exceeded. Subtask failed."})
-                if self.current_thread.id == "thread-main" and self.current_thread.status in ["completed", "failed"]:
-                    break
-                continue
-
-            self.current_thread.step_count += 1
-            
-            # Track which thread is active BEFORE the execution
-            current_thread_id_before = self.current_thread.id
-            current_thread_mcp_server_before = self.current_thread.mcp_server
-            
-            try:
-                decision=await self.llm_call()
-                tool_name=decision.get("tool_name")
-                tool_args=decision.get("tool_args")
-                tool_result=await self.tool_call(tool_name=tool_name,tool_args=tool_args)
-                match tool_name:
-                    case "Start Tool":
-                        logger.info(f"▶️  Starting Thread:")
-                        logger.info(f"🧵 Thread ID: {self.current_thread.id}")
-                        logger.info(f"📌 Subtask: {self.current_thread.task}")
-                        logger.info(f"🔌 Connected to: {self.current_thread.mcp_server}")
-                    case "Switch Tool":
-                        logger.info(f"🔄  Switching Thread:")
-                        logger.info(f"From 🧵 Thread ID: {current_thread_id_before}")
-                        if current_thread_mcp_server_before!=self.current_thread.mcp_server:
-                            logger.info(f"🔌 Disconnecting from: {current_thread_mcp_server_before}")
-                        logger.info(f"To 🧵 Thread ID: {self.current_thread.id}")
-                        if self.current_thread.mcp_server!=current_thread_mcp_server_before:
-                            logger.info(f"🔌 Connecting to: {self.current_thread.mcp_server}")
-                    case "Stop Tool":
-                        logger.info(f"⏹️  Stopping Thread:")
-                        logger.info(f"🧵 Thread ID: {current_thread_id_before}")
-                        if tool_args.get("error"):
-                            logger.info(f"❌ Error: {tool_args.get('error')}")
-                        else:
-                            logger.info(f"✅ Success: {tool_args.get('success')}")
-                        if current_thread_mcp_server_before:
-                            logger.info(f"🔌 Disconnected from: {current_thread_mcp_server_before}")
-                    case _:
-                        thought=decision.get("thought")
-                        logger.info(f"🧠 Thought: {thought}")
-                        logger.info(f"🔧 Tool Call: {tool_name}({', '.join([f'{key}={value}' for key,value in tool_args.items()])})")
-                        logger.info(f"📄 Tool Result: {shorten(tool_result, width=500, placeholder='...')}")
-                print()
-                # Break only if we were in the main thread AND called Stop Tool
-                if current_thread_id_before=="thread-main" and tool_name=="Stop Tool":
-                    return tool_result
-            except Exception as e:
-                logger.error(f"Thread ID {self.current_thread.id} Crashed: {e}")
-                error_msg = f"Thread ID {self.current_thread.id} Execution Failed: {str(e)}"
-                # Force stop the crashing thread, allowing parent to recover
-                stop_result = await self.tool_call("Stop Tool", {"error": error_msg})
+            global_steps = 0
+            while global_steps < self.max_global_steps:
+                global_steps += 1
                 
-                # If Main Thread crashed, we can't recover
-                if current_thread_id_before == "thread-main":
-                     return f"Process Crashed: {stop_result}"
-        
-        return "Max global steps exceeded."
+                # Check Per-Thread Step Limit
+                if self.current_thread.step_count >= self.max_thread_steps:
+                    logger.warning(f"Thread {self.current_thread.id} exceeded max steps ({self.max_thread_steps}). Forcing stop.")
+                    # Force stop the thread
+                    await self.tool_call("Stop Tool", {"error": "Max thread steps exceeded. Subtask failed."})
+                    if self.current_thread.id == "thread-main" and self.current_thread.status in ["completed", "failed"]:
+                        break
+                    continue
+
+                self.current_thread.step_count += 1
+                
+                # Track which thread is active BEFORE the execution
+                current_thread_id_before = self.current_thread.id
+                current_thread_mcp_server_before = self.current_thread.mcp_server
+                
+                try:
+                    decision=await self.llm_call()
+                    tool_name=decision.get("tool_name")
+                    tool_args=decision.get("tool_args")
+                    tool_result=await self.tool_call(tool_name=tool_name,tool_args=tool_args)
+                    match tool_name:
+                        case "Start Tool":
+                            logger.info(f"▶️  Starting Thread:")
+                            logger.info(f"🧵 Thread ID: {self.current_thread.id}")
+                            logger.info(f"📌 Subtask: {self.current_thread.task}")
+                            logger.info(f"🔌 Connected to: {self.current_thread.mcp_server}")
+                        case "Switch Tool":
+                            logger.info(f"🔄  Switching Thread:")
+                            logger.info(f"From 🧵 Thread ID: {current_thread_id_before}")
+                            if current_thread_mcp_server_before!=self.current_thread.mcp_server:
+                                logger.info(f"🔌 Disconnecting from: {current_thread_mcp_server_before}")
+                            logger.info(f"To 🧵 Thread ID: {self.current_thread.id}")
+                            if self.current_thread.mcp_server!=current_thread_mcp_server_before:
+                                logger.info(f"🔌 Connecting to: {self.current_thread.mcp_server}")
+                        case "Stop Tool":
+                            logger.info(f"⏹️  Stopping Thread:")
+                            logger.info(f"🧵 Thread ID: {current_thread_id_before}")
+                            if tool_args.get("error"):
+                                logger.info(f"❌ Error: {tool_args.get('error')}")
+                            else:
+                                logger.info(f"✅ Success: {tool_args.get('success')}")
+                            if current_thread_mcp_server_before:
+                                logger.info(f"🔌 Disconnected from: {current_thread_mcp_server_before}")
+                        case _:
+                            thought=decision.get("thought")
+                            logger.info(f"🧠 Thought: {thought}")
+                            logger.info(f"🔧 Tool Call: {tool_name}({', '.join([f'{key}={value}' for key,value in tool_args.items()])})")
+                            logger.info(f"📄 Tool Result: {shorten(tool_result, width=500, placeholder='...')}")
+                    print()
+                    # Break only if we were in the main thread AND called Stop Tool
+                    if current_thread_id_before=="thread-main" and tool_name=="Stop Tool":
+                        return tool_result
+                except Exception as e:
+                    logger.error(f"Thread ID {self.current_thread.id} Crashed: {e}")
+                    error_msg = f"Thread ID {self.current_thread.id} Execution Failed: {str(e)}"
+                    # Force stop the crashing thread, allowing parent to recover
+                    stop_result = await self.tool_call("Stop Tool", {"error": error_msg})
+                    
+                    # If Main Thread crashed, we can't recover
+                    if current_thread_id_before == "thread-main":
+                            return f"Process Crashed: {stop_result}"
+            
+            return "Max global steps exceeded."
+        except (KeyboardInterrupt,asyncio.CancelledError):
+            logger.warn("⚠️ KeyboardInterrupt. Closing all sessions...")
+            await self.mcp_client.close_all_sessions()
+            return "Process Interrupted."
