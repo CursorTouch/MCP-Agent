@@ -40,11 +40,21 @@
 
 The **MCP Agent** implements a unique **"Virtual CPU"** architecture for cognitive tasks.
 
-- **Logical Threads**: Unlike operating system threads that run in parallel on physical cores, our "Threads" are **logical execution contexts**. They isolate the conversation history and state for specific subtasks. This prevents **Context Pollution**, where an LLM gets confused by too much instruction history from unrelated tasks.
-- **Hierarchical Visibility (Virtual Memory)**: The agent implements strict **Scope Restriction**. A Child Thread cannot see its Parent's history or its Siblings' existence. It only operates within its specific subtask. This mirrors **Virtual Memory isolation** in OS processes, ensuring stability and focus.
-- **Context Switching**: The Agent acts as a scheduler. When it switches tools or tasks, it performs a "context switch," saving the state of the current thread and loading the new one. This allows it to "pause" a complex high-level plan, dive deep into a specific detail (like searching a file), and then return to the main plan with the answer—just like a CPU handling an interrupt.
-- **Strict Manager-Worker Model**: Only the **Parent Thread** (the Manager) can call the `Switch Tool` to multitask between its children. Child Threads (Workers) are "sandboxed" and must simply complete their assigned subtask and `Stop Tool`, preventing them from jumping into unrelated workflows.
-- **Resiliency**: If a sub-thread crashes or gets stuck (e.g., a tool failure), the parent thread can catch the error and decide to retry or try a different approach, preventing the entire agent from crashing.
+- **Logical Threads (Process States)**: Unlike OS threads that run in parallel, our "Threads" are logical execution contexts. They map to **Process States** in an OS. Each thread has its own isolated memory (conversation history) and state (ready, running, blocked). This prevents **Context Pollution**, ensuring the LLM focuses only on the immediate subtask without being distracted by global history.
+
+- **Hierarchical Visibility (Virtual Memory)**: The agent implements strict **Scope Restriction** similar to **Virtual Memory Isolation**.
+  - A **Child Thread** cannot access the Parent's memory (history) or see Independent Sibling threads. It operates in a sandboxed environment.
+  - This acts as a **Memory Management Unit (MMU)** for the LLM, enforcing that a "worker" process only sees the data it needs to do its job, preventing hallucinated cross-thread communication.
+
+- **Context Switching (The Scheduler)**: The `Agent` class acts as the **OS Kernel/Scheduler**.
+  - **Syscall (Start Tool)**: When a thread needs to perform a subtask, it invokes a "syscall" to create a new process (Start Tool). The Kernel saves the Parent's state (Push to Stack) and loads the Child's empty state.
+  - **Interrupt (Stop Tool)**: When a child finishes, it triggers an interrupt. The Kernel terminates the child, pops the stack, and restores the Parent's context with the result in the "return register."
+
+- **Strict User/Kernel Mode (Ring Protection)**:
+  - **Parent Thread (Ring 0)**: Acts as the Manager/Kernel. It has full visibility of its children and can use the `Switch Tool` to multitask between them.
+  - **Child Thread (Ring 3)**: Acts as User Mode. It is restricted. It cannot arbitrarily jump to other threads or modify the global plan. It must simply complete its task and exit (`Stop Tool`), ensuring stability and preventing "runaway processes."
+
+- **Resiliency (Fault Tolerance)**: Just as an OS doesn't crash if a user application segfaults, a failure in a Child Thread doesn't kill the Agent. The Parent Thread catches the "exception" (error message) from the dead child and can decide to spawn a new thread (retry) or change strategies.
 
 ## 🚀 Getting Started
 
