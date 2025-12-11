@@ -36,6 +36,14 @@
 - **🛠️ Extensible Tool System**  
   The agent automatically assimilates tools from connected MCP servers, making them available for use within its reasoning loop.
 
+## 🧩 Architecture Deep Dive
+
+The **MCP Agent** implements a unique **"Virtual CPU"** architecture for cognitive tasks.
+
+- **Logical Threads**: Unlike operating system threads that run in parallel on physical cores, our "Threads" are **logical execution contexts**. They isolate the conversation history and state for specific subtasks. This prevents **Context Pollution**, where an LLM gets confused by too much instruction history from unrelated tasks.
+- **Context Switching**: The Agent acts as a scheduler. When it switches tools or tasks, it performs a "context switch," saving the state of the current thread and loading the new one. This allows it to "pause" a complex high-level plan, dive deep into a specific detail (like searching a file), and then return to the main plan with the answer—just like a CPU handling an interrupt.
+- **Resiliency**: If a sub-thread crashes or gets stuck (e.g., a tool failure), the parent thread can catch the error and decide to retry or try a different approach, preventing the entire agent from crashing.
+
 ## 🚀 Getting Started
 
 ### Prerequisites
