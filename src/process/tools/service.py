@@ -1,6 +1,6 @@
-from src.agent.tools.views import Start,Switch,Stop
+from src.process.tools.views import Start,Switch,Stop
 from src.tool.service import Tool
-from src.agent.views import Thread
+from src.process.views import Thread
 from src.messages import HumanMessage
 from typing import TYPE_CHECKING, Any
 

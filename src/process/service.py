@@ -1,12 +1,12 @@
 from src.messages import SystemMessage,HumanMessage,AIMessage,ImageMessage
-from src.agent.tools.service import start_tool,stop_tool,switch_tool
+from src.process.tools.service import start_tool,stop_tool,switch_tool
 from src.mcp.types.tools import TextContent,ImageContent
-from src.agent.utils import xml_preprocessor
-from src.agent.prompt.service import Prompt
+from src.process.utils import xml_preprocessor
+from src.process.prompt.service import Prompt
 from src.llms.base import BaseChatLLM
 from src.mcp.client import MCPClient
 from src.tool.service import Tool
-from src.agent.views import Thread
+from src.process.views import Thread
 from typing import Optional,Any
 from functools import partial
 from textwrap import shorten
@@ -20,7 +20,7 @@ formatter = logging.Formatter('[%(levelname)s] %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-class Agent:
+class Process:
     def __init__(self,mcp_client:MCPClient,llm:BaseChatLLM,max_thread_steps:int=20,max_global_steps:int=100):
         self.current_thread:Optional[Thread]=None
         self.max_thread_steps=max_thread_steps
