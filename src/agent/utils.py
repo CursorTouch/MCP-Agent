@@ -31,31 +31,23 @@ def _infer_type(value: str):
 def xml_preprocessor(content: str) -> dict[str, any]:
     '''Extracts the tool data from the ai message using XML parsing via Regex'''
     
-    # 1. Find the <tool_code> block
-    block_match = re.search(r'<tool_call>(.*?)</tool_call>', content, re.DOTALL)
-    if not block_match:
-        # Fallback: Maybe the LLM forgot the outer tags? Try finding tool_name and tool_args directly
-        if '<tool_name>' in content and '<tool_args>' in content:
-            raw_content = content
-        else:
-            logger.warning("No <tool_code> block found in response")
-            raise ValueError("No <tool_code> block found in response")
-    else:
-        raw_content = block_match.group(1)
+    # 1. Extract thought
+    thought_match = re.search(r'<thought>(.*?)</thought>', content, re.DOTALL)
+    thought = thought_match.group(1).strip() if thought_match else None
 
     # 2. Extract tool_name
-    name_match = re.search(r'<tool_name>\s*(.*?)\s*</tool_name>', raw_content, re.DOTALL)
+    name_match = re.search(r'<tool_name>\s*(.*?)\s*</tool_name>', content, re.DOTALL)
     if not name_match:
         raise ValueError("No <tool_name> found")
     tool_name = name_match.group(1).strip()
 
     # 3. Extract tool_args block
-    args_block_match = re.search(r'<tool_args>\s*(.*?)\s*</tool_args>', raw_content, re.DOTALL)
+    args_block_match = re.search(r'<tool_args>\s*(.*?)\s*</tool_args>', content, re.DOTALL)
     tool_args = {}
     
     if args_block_match:
         args_content = args_block_match.group(1)
-        # 4. Extract individual arguments using regex
+        # 1. Extract individual arguments using regex
         # Pattern looks for <key>value</key>
         # strict mode: won't handle nested tags well, but good for flat arguments
         # Using finditer to get all arguments
@@ -66,6 +58,7 @@ def xml_preprocessor(content: str) -> dict[str, any]:
             tool_args[key] = _infer_type(value)
 
     return {
+        "thought": thought,
         "tool_name": tool_name,
         "tool_args": tool_args
     }

@@ -38,7 +38,14 @@ class Agent:
             if server_name in self.mcp_server_tools:
                 pass
             else:
-                mcp_session=self.mcp_client.get_session(server_name)
+                try:
+                    mcp_session=self.mcp_client.get_session(server_name)
+                except ValueError:
+                    # Session might be closed (e.g. by a child thread sharing same server name). Reconnect.
+                    logger.debug(f"Session {server_name} not found. Reconnecting for thread {self.current_thread.id}...")
+                    await self.mcp_client.create_session(server_name)
+                    mcp_session=self.mcp_client.get_session(server_name)
+
                 tools_list = await mcp_session.tools_list()
                 mcp_tools={tool.name:Tool(
                     name=tool.name,
@@ -54,8 +61,8 @@ class Agent:
             tools=list(self.agent_tools.values())
         system_prompt=Prompt.system(self.mcp_client,tools,self.current_thread,list(self.threads.values()))
         response=await self.llm.ainvoke(messages=[SystemMessage(content=system_prompt)]+self.current_thread.messages)
-        tool=xml_preprocessor(response.content.content)
-        return tool
+        decision=xml_preprocessor(response.content.content)
+        return decision
     
     async def tool_call(self,tool_name:str,tool_args:dict[str,Any]):
         self.current_thread.messages.append(AIMessage(content=json.dumps({"tool_name":tool_name,"tool_args":tool_args})))
@@ -115,9 +122,12 @@ class Agent:
             # Track which thread is active BEFORE the execution
             current_thread_id_before = self.current_thread.id
             
-            tool=await self.llm_call()
-            tool_name=tool.get("tool_name")
-            tool_args=tool.get("tool_args")
+            decision=await self.llm_call()
+            thought=decision.get("thought")
+            tool_name=decision.get("tool_name")
+            tool_args=decision.get("tool_args")
+
+            logger.info(f"🤔 Thought: {thought}")
             logger.info(f"🛠️ Tool Call: {tool_name}({', '.join([f'{key}={value}' for key,value in tool_args.items()])})")
             tool_result=await self.tool_call(tool_name=tool_name,tool_args=tool_args)
             logger.info(f"📃 Tool Result: {tool_result}")
