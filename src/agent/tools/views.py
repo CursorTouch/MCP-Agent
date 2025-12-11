@@ -10,5 +10,5 @@ class Switch(BaseModel):
 
 class Stop(BaseModel):
     id:Optional[str]=Field(default=None,description="The ID of the thread to stop. Defaults to current thread if omitted.",examples=["thread-123"])
-    result:Optional[str]=Field(default="",description="A comprehensive summary of actions taken and data found. This is the ONLY context returned to the parent.",examples=["The weather in Singapore is sunny."])
+    success:Optional[str]=Field(default="",description="A comprehensive summary of actions taken and data found. This is the ONLY context returned to the parent.",examples=["The weather in Singapore is sunny."])
     error:Optional[str]=Field(default="",description="Error message if the task failed.",examples=["Failed to fetch weather data."])

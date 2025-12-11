@@ -7,7 +7,7 @@ import uuid
 class Thread:
     task: str=''
     server:str=''
-    result: str|None=None
+    success: str|None=None
     error: str|None=None
     status: Literal["idle","progress","completed","started","stopped"]='idle'
     step_count: int = 0

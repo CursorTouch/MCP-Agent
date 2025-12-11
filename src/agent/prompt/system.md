@@ -62,8 +62,8 @@ Following are the threads visible to you (Current Thread + Children):
 - Thread ID: {{ thread.id }}
     - Thread Subtask: {{ thread.task }} {% if thread.id == current_thread.id %} (ACTIVE THREAD) {% endif %}
     - Thread Status: {{ thread.status }}
-{% if thread.result %}
-    - Thread Result: {{ thread.result }}
+{% if thread.success %}
+    - Thread Success: {{ thread.success }}
 {% endif %}
 {% if thread.error %}
     - Thread Error: {{ thread.error }}

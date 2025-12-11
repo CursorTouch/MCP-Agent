@@ -102,12 +102,12 @@ class Agent:
 
     async def invoke(self,task:str):
         messages=[HumanMessage(content=task)]
-        self.current_thread=Thread(id="thread-main",task=task,status="started",messages=messages,server="",result="",error="")
+        self.current_thread=Thread(id="thread-main",task=task,status="started",messages=messages,server="", success="",error="")
         self.threads[self.current_thread.id]=self.current_thread
 
-        logger.info(f"🚀 Starting:")
-        logger.info(f"Thread ID: {self.current_thread.id}")
-        logger.info(f"Main Task: {self.current_thread.task}")
+        logger.info(f"▶️  Starting Thread:")
+        logger.info(f"🧵 Thread ID: {self.current_thread.id}")
+        logger.info(f"🎯 Main Task: {self.current_thread.task}")
         print()
         
         global_steps = 0
@@ -136,36 +136,44 @@ class Agent:
                 tool_result=await self.tool_call(tool_name=tool_name,tool_args=tool_args)
                 match tool_name:
                     case "Start Tool":
-                        logger.info(f"🚀 Starting:")
-                        logger.info(f"Thread ID: {self.current_thread.id}")
-                        logger.info(f"Subtask: {self.current_thread.task}")
-                        logger.info(f"Connected to: {self.current_thread.server}")
+                        logger.info(f"▶️  Starting Thread:")
+                        logger.info(f"🧵 Thread ID: {self.current_thread.id}")
+                        logger.info(f"📌 Subtask: {self.current_thread.task}")
+                        logger.info(f"🔌 Connected to: {self.current_thread.server}")
                     case "Switch Tool":
-                        logger.info(f"🔄 Switching:")
-                        logger.info(f"From Thread ID: {current_thread_id_before}")
-                        logger.info(f"To Thread ID: {self.current_thread.id}")
+                        logger.info(f"🔄  Switching Thread:")
+                        logger.info(f"From 🧵 Thread ID: {current_thread_id_before}")
+                        if current_thread_server_before!=self.current_thread.server:
+                            logger.info(f"🔌 Disconnecting from: {current_thread_server_before}")
+                        logger.info(f"To 🧵 Thread ID: {self.current_thread.id}")
+                        if self.current_thread.server!=current_thread_server_before:
+                            logger.info(f"🔌 Connecting to: {self.current_thread.server}")
                     case "Stop Tool":
-                        logger.info(f"🛑 Stopping:")
-                        logger.info(f"Thread ID: {current_thread_id_before}")
+                        logger.info(f"⏹️  Stopping Thread:")
+                        logger.info(f"🧵 Thread ID: {current_thread_id_before}")
+                        if tool_args.get("error"):
+                            logger.info(f"❌ Error: {tool_args.get('error')}")
+                        else:
+                            logger.info(f"✅ Success: {tool_args.get('success')}")
                         if current_thread_server_before:
-                            logger.info(f"Disconnected from: {current_thread_server_before}")
+                            logger.info(f"🔌 Disconnected from: {current_thread_server_before}")
                     case _:
                         thought=decision.get("thought")
-                        logger.info(f"🤔 Thought: {thought}")
-                        logger.info(f"🛠️ Tool Call: {tool_name}({', '.join([f'{key}={value}' for key,value in tool_args.items()])})")
-                        logger.info(f"📃 Tool Result: {shorten(tool_result, width=500, placeholder='...')}")
+                        logger.info(f"🧠 Thought: {thought}")
+                        logger.info(f"🔧 Tool Call: {tool_name}({', '.join([f'{key}={value}' for key,value in tool_args.items()])})")
+                        logger.info(f"📄 Tool Result: {shorten(tool_result, width=500, placeholder='...')}")
                 print()
                 # Break only if we were in the main thread AND called Stop Tool
                 if current_thread_id_before=="thread-main" and tool_name=="Stop Tool":
                     return tool_result
             except Exception as e:
-                logger.error(f"Crash in Thread {self.current_thread.id}: {e}")
-                error_msg = f"Thread Execution Failed: {str(e)}"
+                logger.error(f"Thread ID {self.current_thread.id} Crashed: {e}")
+                error_msg = f"Thread ID {self.current_thread.id} Execution Failed: {str(e)}"
                 # Force stop the crashing thread, allowing parent to recover
                 stop_result = await self.tool_call("Stop Tool", {"error": error_msg})
                 
                 # If Main Thread crashed, we can't recover
                 if current_thread_id_before == "thread-main":
-                     return f"Critical Agent Failure: {stop_result}"
+                     return f"Process Crashed: {stop_result}"
         
         return "Max global steps exceeded."
