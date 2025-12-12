@@ -1,21 +1,25 @@
 from src.mcp.types.json_rpc import (
     JSONRPCRequest,
     JSONRPCResponse,
+    JSONRPCResultResponse,
+    JSONRPCErrorResponse,
     JSONRPCError,
     JSONRPCNotification,
+    JSONRPCMessage,
     Error, Method
 )
 from src.mcp.transport.utils import get_default_environment
-from src.mcp.types.elicitation import ElicitRequest
+from src.mcp.logger import get_logger
+
 from src.mcp.types.stdio import StdioServerParams
-from src.mcp.types.sampling import MessageRequest
 from src.mcp.transport.base import BaseTransport
-from src.mcp.types.roots import ListRootsRequest
 from src.mcp.exception import MCPError
 from asyncio.subprocess import Process
 import asyncio
 import json
 import sys
+
+logger = get_logger(__name__)
 
 
 class StdioTransport(BaseTransport):
@@ -56,7 +60,7 @@ class StdioTransport(BaseTransport):
 
         self.listen_task = asyncio.create_task(self.listen())
 
-    async def send_request(self, request: JSONRPCRequest) -> JSONRPCResponse:
+    async def send_request(self, request: JSONRPCMessage) -> JSONRPCResponse:
         """
         Send a JSON-RPC request to the MCP server and await response.
         """
@@ -69,7 +73,7 @@ class StdioTransport(BaseTransport):
         # Send request
         if self.process.stdin.is_closing():
             raise MCPError(code=-1, message="Process stdin is closing")
-        self.process.stdin.write((json.dumps(request.model_dump()) + "\n").encode())
+        self.process.stdin.write((json.dumps(request.model_dump(by_alias=True)) + "\n").encode())
         await self.process.stdin.drain()
 
         try:
@@ -78,7 +82,7 @@ class StdioTransport(BaseTransport):
             self.pending.pop(request.id, None)
             raise MCPError(code=-1, message="Request timed out")
 
-        if isinstance(response, JSONRPCError):
+        if isinstance(response, JSONRPCErrorResponse):
             raise MCPError(code=response.error.code, message=response.error.message)
 
         return response
@@ -90,17 +94,17 @@ class StdioTransport(BaseTransport):
         if self.process.stdin.is_closing():
              raise MCPError(code=-1, message="Process stdin is closing")
 
-        self.process.stdin.write((json.dumps(response.model_dump()) + "\n").encode())
+        self.process.stdin.write((json.dumps(response.model_dump(by_alias=True)) + "\n").encode())
         await self.process.stdin.drain()
     
-    async def send_notification(self, notification: JSONRPCNotification) -> None:
+    async def send_notification(self, notification: JSONRPCMessage) -> None:
         """
         Send a JSON-RPC notification (fire-and-forget).
         """
         if not self.process or not self.process.stdin:
             raise MCPError(code=-1, message="Process not connected")
 
-        self.process.stdin.write((json.dumps(notification.model_dump()) + "\n").encode())
+        self.process.stdin.write((json.dumps(notification.model_dump(by_alias=True)) + "\n").encode())
         await self.process.stdin.drain()
 
     async def listen(self):
@@ -117,14 +121,18 @@ class StdioTransport(BaseTransport):
                     content: dict = json.loads(line.decode().strip())
 
                     if "result" in content: # Response
-                        message = JSONRPCResponse.model_validate(content)
-                    elif "method" in content: # Request
-                        message = JSONRPCRequest.model_validate(content)
-                        response=await self.handle_request(message)
-                        await self.send_response(response)
+                        message = JSONRPCResultResponse.model_validate(content)
+                    elif "method" in content: # Request or Notification
+                        if "id" in content:
+                            message = JSONRPCRequest.model_validate(content)
+                            response = await self.handle_request(message)
+                            await self.send_response(response)
+                        else:
+                            message = JSONRPCNotification.model_validate(content)
+                            await self.handle_notification(message)
                     elif "error" in content: # Error
                         err = Error.model_validate(content["error"])
-                        message = JSONRPCError(id=content.get("id"), error=err, message=err.message)
+                        message = JSONRPCErrorResponse(id=content.get("id"), error=err)
                     else:
                         continue
 
@@ -138,7 +146,7 @@ class StdioTransport(BaseTransport):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"Error reading from process: {e}")
+                logger.error(f"Error reading from process: {e}", exc_info=True)
 
     async def disconnect(self):
         """Gracefully disconnect and terminate the process."""
@@ -165,7 +173,7 @@ class StdioTransport(BaseTransport):
             try:
                 await asyncio.wait_for(self.process.wait(), timeout=5)
             except asyncio.TimeoutError:
-                print("Process did not terminate in time; killing it.")
+                logger.warning("Process did not terminate in time; killing it.")
                 self.process.kill()
                 await self.process.wait()
 

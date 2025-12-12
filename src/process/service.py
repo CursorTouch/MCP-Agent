@@ -1,7 +1,7 @@
 from src.messages import SystemMessage,HumanMessage,AIMessage,ImageMessage
 from src.process.tools.service import start_tool,stop_tool,switch_tool
-from src.mcp.types.tools import TextContent,ImageContent,ToolRequest
-from src.mcp.client.session import MCPSession
+from src.mcp.types.content import TextContent,ImageContent
+from src.mcp.types.tools import CallToolRequestParams
 from src.process.utils import xml_preprocessor
 from src.process.prompt.service import Prompt
 from src.llms.base import BaseChatLLM
@@ -41,20 +41,19 @@ class Process:
             if server_name in self.mcp_server_tools:
                 pass
             else:
-                try:
-                    mcp_session=self.mcp_client.get_session(server_name)
-                except ValueError:
+                mcp_session = self.mcp_client.get_session(server_name)
+                if mcp_session is None:
                     # Session might be closed (e.g. by a child thread sharing same server name). Reconnect.
                     logger.debug(f"Session {server_name} not found. Reconnecting for thread {self.current_thread.id}...")
                     await self.mcp_client.create_session(server_name)
-                    mcp_session=self.mcp_client.get_session(server_name)
+                    mcp_session = self.mcp_client.get_session(server_name)
 
                 tools_list = await mcp_session.tools_list()
                 mcp_tools={tool.name:Tool(
                     name=tool.name,
                     description=tool.description,
                     args_schema=tool.inputSchema,
-                    func=partial(lambda session,tool_name,**kwargs: session.tools_call(ToolRequest(name=tool_name,arguments=kwargs)), mcp_session, tool.name)
+                    func=partial(lambda session,tool_name,**kwargs: session.tools_call(CallToolRequestParams(name=tool_name,arguments=kwargs)), mcp_session, tool.name)
                 ) for tool in tools_list.tools}
                 # Update cache
                 self.mcp_server_tools[server_name] = mcp_tools
@@ -102,7 +101,7 @@ class Process:
                 self.current_thread.messages.append(HumanMessage(content=content))
         return tool_result
 
-    async def invoke(self,task:str):
+    async def ainvoke(self,task:str):
         try:
             messages=[HumanMessage(content=task)]
             self.current_thread=Thread(id="thread-main",task=task,status="started",messages=messages, mcp_server="", success="",error="")

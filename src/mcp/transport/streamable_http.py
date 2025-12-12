@@ -2,16 +2,22 @@ from src.mcp.types.json_rpc import (
     JSONRPCRequest,
     JSONRPCNotification,
     JSONRPCResponse,
+    JSONRPCResultResponse,
+    JSONRPCErrorResponse,
     JSONRPCError,
+    JSONRPCMessage,
     Error,
     Method,
 )
 from src.mcp.transport.base import BaseTransport
 from src.mcp.exception import MCPError
+from src.mcp.logger import get_logger
 from httpx import AsyncClient, Limits
 from typing import Optional, Dict
 import asyncio
 import json
+
+logger = get_logger(__name__)
 
 
 class StreamableHTTPTransport(BaseTransport):
@@ -51,7 +57,7 @@ class StreamableHTTPTransport(BaseTransport):
         if self.mcp_session_id:
             headers["mcp-session-id"] = self.mcp_session_id
 
-        await self.client.post(self.url, headers=headers, json=response.model_dump())
+        await self.client.post(self.url, headers=headers, json=response.model_dump(by_alias=True))
 
     async def listen(self):
         """
@@ -82,7 +88,7 @@ class StreamableHTTPTransport(BaseTransport):
 
                             if "result" in content:
                                 msg_id = content.get("id")
-                                message = JSONRPCResponse.model_validate(content)
+                                message = JSONRPCResultResponse.model_validate(content)
                                 if msg_id in self.pending:
                                     fut = self.pending.pop(msg_id)
                                     if not fut.done():
@@ -96,10 +102,9 @@ class StreamableHTTPTransport(BaseTransport):
                             elif "error" in content:
                                 msg_id = content.get("id")
                                 err = Error.model_validate(content["error"])
-                                message = JSONRPCError(
+                                message = JSONRPCErrorResponse(
                                     id=msg_id,
                                     error=err,
-                                    message=err.message,
                                 )
                                 if msg_id in self.pending:
                                     fut = self.pending.pop(msg_id)
@@ -107,9 +112,9 @@ class StreamableHTTPTransport(BaseTransport):
                                         fut.set_result(message)
 
         except Exception as e:
-            print(f"[Listen Error] {e}")
+            logger.error(f"Listen error: {e}", exc_info=True)
 
-    async def send_request(self, request: JSONRPCRequest) -> JSONRPCResponse:
+    async def send_request(self, request: JSONRPCMessage) -> JSONRPCResponse:
         """
         Send a JSON-RPC request and await its response via Future.
         """
@@ -130,7 +135,7 @@ class StreamableHTTPTransport(BaseTransport):
         if self.protocol_version:
             headers["mcp-protocol-version"] = self.protocol_version
 
-        await self.client.post(self.url, headers=headers, json=request.model_dump())
+        await self.client.post(self.url, headers=headers, json=request.model_dump(by_alias=True))
 
         try:
             response = await asyncio.wait_for(future, timeout=30)
@@ -138,7 +143,7 @@ class StreamableHTTPTransport(BaseTransport):
             self.pending.pop(request.id, None)
             raise MCPError(code=-1, message="Request timed out")
 
-        if isinstance(response, JSONRPCError):
+        if isinstance(response, JSONRPCErrorResponse):
             raise MCPError(code=response.error.code, message=response.error.message)
 
         # If initialize method, capture protocol version
@@ -147,7 +152,7 @@ class StreamableHTTPTransport(BaseTransport):
 
         return response
 
-    async def send_notification(self, notification: JSONRPCNotification):
+    async def send_notification(self, notification: JSONRPCMessage):
         """Send a fire-and-forget notification."""
         if not self.client:
             raise MCPError(code=-1, message="HTTP client not connected")
@@ -161,7 +166,7 @@ class StreamableHTTPTransport(BaseTransport):
         if self.mcp_session_id:
             headers["mcp-session-id"] = self.mcp_session_id
 
-        await self.client.post(self.url, headers=headers, json=notification.model_dump())
+        await self.client.post(self.url, headers=headers, json=notification.model_dump(by_alias=True))
 
     async def disconnect(self):
         """Gracefully close the session and cancel pending Futures."""

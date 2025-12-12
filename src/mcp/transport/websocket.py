@@ -1,12 +1,18 @@
-from src.mcp.types.json_rpc import JSONRPCRequest, JSONRPCResponse, JSONRPCError, Error, JSONRPCNotification
+from src.mcp.types.json_rpc import JSONRPCRequest, JSONRPCResponse, JSONRPCResultResponse, JSONRPCErrorResponse, JSONRPCError, Error, JSONRPCNotification, JSONRPCMessage
 from src.mcp.exception import MCPError
+from src.mcp.logger import get_logger
 from typing import Optional, Dict
 import websockets
 import asyncio
 import json
 
+logger = get_logger(__name__)
 
-class WebSocketTransport:
+
+from src.mcp.transport.base import BaseTransport
+
+
+class WebSocketTransport(BaseTransport):
     """
     WebSocket Transport for MCP
     Uses asyncio.Future for one-shot request/response correlation.
@@ -32,7 +38,7 @@ class WebSocketTransport:
         """Send a JSON-RPC response."""
         if not self.websocket:
              raise MCPError(code=-1, message="WebSocket not connected")
-        await self.websocket.send(json.dumps(response.model_dump()))
+        await self.websocket.send(json.dumps(response.model_dump(by_alias=True)))
 
     async def listen(self):
         """Listen for JSON-RPC messages from the MCP server."""
@@ -43,7 +49,7 @@ class WebSocketTransport:
                     
                     if "result" in content:
                         msg_id = content.get("id")
-                        message = JSONRPCResponse.model_validate(content)
+                        message = JSONRPCResultResponse.model_validate(content)
                         # Resolve the corresponding pending future
                         future = self.pending.pop(msg_id, None)
                         if future and not future.done():
@@ -57,7 +63,7 @@ class WebSocketTransport:
                     elif "error" in content:
                         msg_id = content.get("id")
                         err = Error.model_validate(content["error"])
-                        message = JSONRPCError(id=msg_id, error=err, message=err.message)
+                        message = JSONRPCErrorResponse(id=msg_id, error=err)
                         # Resolve the corresponding pending future
                         future = self.pending.pop(msg_id, None)
                         if future and not future.done():
@@ -67,14 +73,14 @@ class WebSocketTransport:
                         continue
 
                 except Exception as e:
-                    print(f"Error parsing WebSocket message: {e}")
+                    logger.error(f"Error parsing WebSocket message: {e}", exc_info=True)
 
         except websockets.exceptions.ConnectionClosed:
-            print("WebSocket connection closed.")
+            logger.info("WebSocket connection closed.")
         except Exception as e:
-            print(f"WebSocket listen error: {e}")
+            logger.error(f"WebSocket listen error: {e}", exc_info=True)
 
-    async def send_request(self, request: JSONRPCRequest) -> JSONRPCResponse:
+    async def send_request(self, request: JSONRPCMessage) -> JSONRPCResponse:
         """
         Send a JSON-RPC request and wait for its response.
         """
@@ -84,7 +90,7 @@ class WebSocketTransport:
         future = asyncio.get_event_loop().create_future()
         self.pending[request.id] = future
 
-        await self.websocket.send(json.dumps(request.model_dump()))
+        await self.websocket.send(json.dumps(request.model_dump(by_alias=True)))
 
         try:
             response = await asyncio.wait_for(future, timeout=30)
@@ -92,19 +98,19 @@ class WebSocketTransport:
             self.pending.pop(request.id, None)
             raise MCPError(code=-1, message="Request timed out.")
 
-        if isinstance(response, JSONRPCError):
+        if isinstance(response, JSONRPCErrorResponse):
             raise MCPError(code=response.error.code, message=response.error.message)
 
         return response
 
-    async def send_notification(self, notification: JSONRPCNotification):
+    async def send_notification(self, notification: JSONRPCMessage):
         """
         Send a JSON-RPC notification (fire and forget).
         """
         if not self.websocket:
             raise MCPError(code=-1, message="WebSocket not connected")
 
-        await self.websocket.send(json.dumps(notification.model_dump()))
+        await self.websocket.send(json.dumps(notification.model_dump(by_alias=True)))
 
     async def disconnect(self):
         """Gracefully close the WebSocket connection."""

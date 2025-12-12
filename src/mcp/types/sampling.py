@@ -1,46 +1,82 @@
-from src.mcp.types.prompts import TextContent,ImageContent,AudioContent
-from typing import Literal,Optional,Protocol,Union
-from pydantic import BaseModel,Field,ConfigDict
-from src.mcp.types.json_rpc import Error
+from typing import Literal, Optional, Protocol, Union, Any
+from pydantic import BaseModel, Field, ConfigDict
+from src.mcp.types.common import Error, Role, RequestId, ProgressToken, Result
+from src.mcp.types.content import TextContent, ImageContent, AudioContent, ContentBlock
+from src.mcp.types.tasks import TaskMetadata
+from src.mcp.types.tools import Tool
 
-Role=Literal["user","assistant"]
-StopReason=Literal['endTurn','stopSequence','maxTokens']
-IncludeContext=Literal['none','thisService','allServices']
+StopReason = Literal["endTurn", "stopSequence", "maxTokens", "toolUse"]
+IncludeContext = Literal["none", "thisServer", "allServers"]
 
-class SamplingFn(Protocol):
-    async def __call__(self,params:'MessageRequest')->Union['MessageResult',Error]:
-        ...
-
-class Message(BaseModel):
-    role: Role
-    content: TextContent | ImageContent | AudioContent
-    model_config=ConfigDict(extra='allow')
-
-class MessageResult(BaseModel):
-    role: Role
-    content: TextContent | ImageContent | AudioContent
-    model:str
-    stopReason:Optional[StopReason]=None
-    model_config=ConfigDict(extra='allow')
-
-class Model(BaseModel):
-    name:Optional[str]=None
-    model_config=ConfigDict(extra='allow')
+class ModelHint(BaseModel):
+    name: Optional[str] = None
+    model_config = ConfigDict(extra='allow')
 
 class ModelPreferences(BaseModel):
-    hints:Optional[list[Model]]=None
-    intelligencePriority:Optional[float]=Field(le=0.0,ge=1.0)
-    speedPriority:Optional[float]=Field(le=0.0,ge=1.0)
-    costPriority:Optional[float]=Field(le=0.0,ge=1.0)
-    model_config=ConfigDict(extra='allow')
+    costPriority: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    hints: Optional[list[ModelHint]] = None
+    intelligencePriority: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    speedPriority: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    model_config = ConfigDict(extra='allow')
 
-class MessageRequest(BaseModel):
-    messages: list[Message]
-    modelPreferences:ModelPreferences|None=None
-    systemPrompt:str|None=None
-    IncludeContext:Union['IncludeContext',None]=None
-    temperature:float|None=None
-    maxTokens:int
-    stopSequences:list[str]|None=None
-    metadata:dict[str,str]|None=None
-    model_config=ConfigDict(extra='allow')
+class ToolUseContent(BaseModel):
+    type: Literal["tool_use"] = "tool_use"
+    id: str
+    input: dict[str, Any]
+    name: str
+    meta: Optional[dict[str, Any]] = Field(default=None, alias="_meta")
+    model_config = ConfigDict(extra='allow')
+
+class ToolResultContent(BaseModel):
+    type: Literal["tool_result"] = "tool_result"
+    content: list[ContentBlock]
+    isError: bool = False
+    structuredContent: Optional[dict[str, Any]] = None
+    toolUseId: str
+    meta: Optional[dict[str, Any]] = Field(default=None, alias="_meta")
+    model_config = ConfigDict(extra='allow')
+
+SamplingMessageContentBlock = Union[TextContent, ImageContent, ToolUseContent, ToolResultContent]
+
+class SamplingMessage(BaseModel):
+    content: Union[SamplingMessageContentBlock, list[SamplingMessageContentBlock]]
+    role: Role
+    meta: Optional[dict[str, Any]] = Field(default=None, alias="_meta")
+    model_config = ConfigDict(extra='allow')
+
+class ToolChoice(BaseModel):
+    mode: Literal["none", "required", "auto"] = "auto"
+    model_config = ConfigDict(extra='allow')
+
+class CreateMessageRequestParams(BaseModel):
+    includeContext: Optional[IncludeContext] = "none"
+    maxTokens: int
+    messages: list[SamplingMessage]
+    metadata: Optional[dict[str, Any]] = None
+    modelPreferences: Optional[ModelPreferences] = None
+    stopSequences: Optional[list[str]] = None
+    systemPrompt: Optional[str] = None
+    task: Optional[TaskMetadata] = None
+    temperature: Optional[float] = None
+    toolChoice: Optional[ToolChoice] = Field(default_factory=ToolChoice)
+    tools: Optional[list[Tool]] = None
+    meta: Optional[dict[str, Any]] = Field(default=None, alias="_meta")
+    model_config = ConfigDict(extra='allow')
+
+class CreateMessageRequest(BaseModel):
+    id: RequestId
+    jsonrpc: Literal["2.0"] = "2.0"
+    method: Literal["sampling/createMessage"] = "sampling/createMessage"
+    params: CreateMessageRequestParams
+    model_config = ConfigDict(extra='allow')
+
+class CreateMessageResult(Result):
+    content: Union[SamplingMessageContentBlock, list[SamplingMessageContentBlock]]
+    model: str
+    role: Role
+    stopReason: Optional[Union[StopReason, str]] = None
+    model_config = ConfigDict(extra='allow')
+
+class SamplingFn(Protocol):
+    async def __call__(self, params: CreateMessageRequestParams) -> Union[CreateMessageResult, Error]:
+        ...

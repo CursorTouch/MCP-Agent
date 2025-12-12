@@ -1,40 +1,41 @@
 from pydantic import BaseModel,Field,ConfigDict
-from typing import Optional,Any
+from typing import Optional,Any, Union
 from enum import Enum
+from src.mcp.types.common import RequestId, Error
+
+JSONRPCError = Error
 
 class JSONRPCRequest(BaseModel):
     jsonrpc: str=Field(default="2.0")
-    id: Optional[str|int]=None
-    method: Optional['Method']=None
+    id: RequestId
+    method: str
     params: Optional[dict[str,Any]]=None
 
     model_config=ConfigDict(extra='allow')
 
 class JSONRPCNotification(BaseModel):
     jsonrpc: str=Field(default="2.0")
-    method: Optional['Method']=None
+    method: str
     params: Optional[dict[str,Any]]=None
+    
+    model_config=ConfigDict(extra='allow')
 
-class JSONRPCResponse(BaseModel):
+class JSONRPCResultResponse(BaseModel):
     jsonrpc: str=Field(default="2.0")
-    id: Optional[str|int]=None
-    result: Optional[dict[str,Any]]=None
+    id: RequestId
+    result: Any
 
     model_config=ConfigDict(extra='allow')
 
-class JSONRPCError(BaseModel):
+class JSONRPCErrorResponse(BaseModel):
     jsonrpc: str=Field(default="2.0")
-    id: Optional[str|int]=None
-    error: 'Error'
+    id: Optional[RequestId]=None
+    error: Error
 
     model_config=ConfigDict(extra='allow')
 
-class Error(BaseModel):
-    code: int
-    message: str
-    data: Optional[Any]=None
-
-    model_config=ConfigDict(extra='allow')
+JSONRPCResponse = Union[JSONRPCResultResponse, JSONRPCErrorResponse]
+JSONRPCMessage = Union[JSONRPCRequest, JSONRPCNotification, JSONRPCResponse, BaseModel]
 
 class Method(str,Enum):
     # Ping
@@ -72,12 +73,24 @@ class Method(str,Enum):
 
     # Root methods
     ROOTS_LIST="roots/list"
+    
+    # Task methods
+    TASKS_GET = "tasks/get"
+    TASKS_LIST = "tasks/list"
+    TASKS_CANCEL = "tasks/cancel"
+    TASKS_RESULT = "tasks/result"
 
     # Notification methods
     NOTIFICATION_INITIALIZED = "notifications/initialized"
     NOTIFICATION_CANCELLED = "notifications/cancelled"
     NOTIFICATION_PROGRESS = "notifications/progress"
     NOTIFICATION_MESSAGE = "notifications/message"
+    
+    # Task notifications
+    NOTIFICATION_TASKS_STATUS = "notifications/tasks/status"
+    
+    # Elicitation notifications
+    NOTIFICATION_ELICITATION_COMPLETE = "notifications/elicitation/complete"
 
     # Resource notifications
     NOTIFICATION_RESOURCES_LIST_CHANGED = "notifications/resources/list_changed"
