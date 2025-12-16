@@ -12,7 +12,6 @@ from typing import Optional,Any
 from functools import partial
 from textwrap import shorten
 import logging
-import json
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -68,7 +67,8 @@ class Process:
         return decision
     
     async def tool_call(self,tool_name:str,tool_args:dict[str,Any]):
-        self.current_thread.messages.append(AIMessage(content=json.dumps({"tool_name":tool_name,"tool_args":tool_args})))
+        tool_call_content=f"<tool_name>{tool_name}</tool_name><tool_args>{' '.join([f'<{key}>{value}</{key}>' for key,value in tool_args.items()])}</tool_args>"
+        self.current_thread.messages.append(AIMessage(content=tool_call_content))
         match tool_name:
             case "Start Tool"|"Switch Tool"|"Stop Tool":
                 tool=self.agent_tools[tool_name]
