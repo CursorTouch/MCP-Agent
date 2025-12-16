@@ -49,19 +49,20 @@ class Process:
                     mcp_session = self.mcp_client.get_session(server_name)
 
                 tools_list = await mcp_session.tools_list()
+                tools=tools_list.tools
                 mcp_tools={tool.name:Tool(
                     name=tool.name,
                     description=tool.description,
                     args_schema=tool.inputSchema,
-                    func=partial(lambda session,tool_name,**kwargs: session.tools_call(CallToolRequestParams(name=tool_name,arguments=kwargs)), mcp_session, tool.name)
-                ) for tool in tools_list.tools}
+                    func=partial(lambda session,tool,**kwargs: session.tools_call(CallToolRequestParams(name=tool.name,arguments=kwargs)), mcp_session, tool)
+                ) for tool in tools}
                 # Update cache
                 self.mcp_server_tools[server_name] = mcp_tools
                 
             tools=list(self.mcp_server_tools[server_name].values())+list(self.agent_tools.values())
         else:
             tools=list(self.agent_tools.values())
-        system_prompt=Prompt.system(self.mcp_client,tools,self.current_thread,list(self.threads.values()))
+        system_prompt=Prompt.system(mcp_client=self.mcp_client,tools=tools,current_thread=self.current_thread,threads=list(self.threads.values()))
         response=await self.llm.ainvoke(messages=[SystemMessage(content=system_prompt)]+self.current_thread.messages)
         decision=xml_preprocessor(response.content.content)
         return decision
@@ -89,21 +90,25 @@ class Process:
                             else:
                                 # TODO: Handle other types of tool results
                                 pass
-                        content="\n".join(texts)
+                        tool_result="\n".join(texts)
+                        content=f"<tool_result>{tool_result}</tool_result>"
                         if images:
                             self.current_thread.messages.append(ImageMessage(images=images,content=content))
                         else:
                             self.current_thread.messages.append(HumanMessage(content=content))
-                        tool_result=content
+                        return tool_result
+                        
                     except Exception as e:
                         tool_result=f"Error calling tool {tool_name}: {str(e)}"
                         logger.debug(f"[Tool Result] {tool_result}")
+
                 else:
                     tool_result=f"Tool {tool_name} not found"
                     logger.debug(f"[Tool Result] {tool_result}")
+
                 content=f"<tool_result>{tool_result}</tool_result>"
                 self.current_thread.messages.append(HumanMessage(content=content))
-        return tool_result
+                return tool_result
 
     async def ainvoke(self,task:str):
         try:
@@ -123,11 +128,15 @@ class Process:
                 # Check Per-Thread Step Limit
                 if self.current_thread.step_count >= self.max_thread_steps:
                     logger.warning(f"Thread {self.current_thread.id} exceeded max steps ({self.max_thread_steps}). Forcing stop.")
-                    # Force stop the thread
-                    await self.tool_call("Stop Tool", {"error": "Max thread steps exceeded. Subtask failed."})
+                    # Force stop the current thread
+                    await self.tool_call("Stop Tool", {"id": self.current_thread.id, "error": f"Exceeded max steps. {'Subtask' if self.current_thread.id != 'thread-main' else 'Main Task'} failed forced to stop."})
+                    # Check if the current thread is the main thread and if it is completed or failed
                     if self.current_thread.id == "thread-main" and self.current_thread.status in ["completed", "failed"]:
                         break
-                    continue
+                    else:
+                        # After switching to the parent thread 
+                        # If the current thread is not the main thread, continue to the next iteration
+                        continue
 
                 self.current_thread.step_count += 1
                 
@@ -139,15 +148,18 @@ class Process:
                     decision=await self.llm_call()
                     tool_name=decision.get("tool_name")
                     tool_args=decision.get("tool_args")
+
                     tool_result=await self.tool_call(tool_name=tool_name,tool_args=tool_args)
+
                     match tool_name:
                         case "Start Tool":
                             logger.info(f"▶️  Starting Thread:")
                             logger.info(f"🧵 Thread ID: {self.current_thread.id}")
-                            if self.current_thread.parent_id:
-                                logger.info(f"🧶 Parent Thread ID: {self.current_thread.parent_id}")
                             logger.info(f"📌 Subtask: {self.current_thread.task}")
                             logger.info(f"🔌 Connected to: {self.current_thread.mcp_server}")
+                            if self.current_thread.parent_id:
+                                logger.info(f"🧶 Parent Thread ID: {self.current_thread.parent_id}")
+
                         case "Switch Tool":
                             logger.info(f"🔄  Switching Thread:")
                             logger.info(f"From 🧵 Thread ID: {current_thread_id_before}")
@@ -156,6 +168,7 @@ class Process:
                             logger.info(f"To 🧵 Thread ID: {self.current_thread.id}")
                             if self.current_thread.mcp_server!=current_thread_mcp_server_before:
                                 logger.info(f"🔌 Connecting to: {self.current_thread.mcp_server}")
+
                         case "Stop Tool":
                             logger.info(f"⏹️  Stopping Thread:")
                             logger.info(f"🧵 Thread ID: {current_thread_id_before}")
@@ -165,15 +178,18 @@ class Process:
                                 logger.info(f"✅ Success: {tool_args.get('success', 'Task Completed')}")
                             if current_thread_mcp_server_before:
                                 logger.info(f"🔌 Disconnected from: {current_thread_mcp_server_before}")
+
                         case _:
                             thought=decision.get("thought")
                             logger.info(f"🧠 Thought: {thought}")
                             logger.info(f"🔧 Tool Call: {tool_name}({', '.join([f'{key}={value}' for key,value in tool_args.items()])})")
                             logger.info(f"📄 Tool Result: {shorten(tool_result, width=500, placeholder='...')}")
+
                     print()
                     # Break only if we were in the main thread AND called Stop Tool
                     if current_thread_id_before=="thread-main" and tool_name=="Stop Tool":
                         return tool_result
+
                 except Exception as e:
                     logger.error(f"Thread ID {self.current_thread.id} Crashed: {e}", exc_info=True)
                     error_msg = f"Thread ID {self.current_thread.id} Execution Failed: {str(e)}"
@@ -182,11 +198,12 @@ class Process:
                     
                     # If Main Thread crashed, we can't recover
                     if current_thread_id_before == "thread-main":
+                        logger.warn("⚠️ Main Thread Crashed. Closing all MCP sessions...")
                         await self.mcp_client.close_all_sessions()
                         return f"Process Crashed: {stop_result}"
             
             return "Max global steps exceeded."
         except (KeyboardInterrupt,asyncio.CancelledError):
-            logger.warn("⚠️ KeyboardInterrupt. Closing all sessions...")
+            logger.warn("⚠️ KeyboardInterrupt. Closing all MCP sessions...")
             await self.mcp_client.close_all_sessions()
             return "Process Interrupted."

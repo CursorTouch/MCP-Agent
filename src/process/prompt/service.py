@@ -14,6 +14,7 @@ class Prompt:
         
         # HIERARCHICAL VISIBILITY implementation:
         # Only show the Current Thread and its immediate Children.
+        
         # This hides the Parent thread (and its global goal) from the Child, preventing context leakage.
         visible_threads = [current_thread] + [t for t in threads if t.parent_id == current_thread.id]
         
