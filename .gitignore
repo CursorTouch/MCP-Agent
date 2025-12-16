@@ -161,10 +161,7 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-mcp_servers
-mcp_store
 notebook.ipynb
-# config.json
 
 
 # PyCharm

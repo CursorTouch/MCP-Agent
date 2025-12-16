@@ -6,6 +6,16 @@
       "args": [
         "windows-mcp"
       ]
+    },
+    "calculator-mcp": {
+      "description": "MCP server for calculator tasks",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "./mcp_servers",
+        "run",
+        "calculator_mcp.py"
+      ]
     }
   }
 }
