@@ -56,6 +56,7 @@ class StdioTransport(BaseTransport):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             start_new_session=True,
+            limit=1024 * 1024 * 10 # 10MB limit
         )
 
         self.listen_task = asyncio.create_task(self.listen())
