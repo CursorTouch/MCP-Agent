@@ -1,6 +1,7 @@
 import re
 import json
 import logging
+import ast
 
 logger=logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -25,7 +26,14 @@ def _infer_type(value: str):
         return float(value)
     except ValueError:
         pass
-        
+    
+    try:
+        return ast.literal_eval(value)
+    except SyntaxError:
+        pass
+    except ValueError:
+        pass
+
     return value
 
 def xml_preprocessor(content: str) -> dict[str, any]:

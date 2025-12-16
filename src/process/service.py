@@ -75,6 +75,7 @@ class Process:
                 logger.debug(f"[Tool Call] {tool_name}({', '.join([f'{key}={value}' for key,value in tool_args.items()])})")
                 tool_result = await tool.ainvoke(process=self, **tool_args)
                 logger.debug(f"[Tool Result] {tool_result}")
+                return tool_result
             case _:
                 current_mcp_server_tools=self.mcp_server_tools.get(self.current_thread.mcp_server.lower(),{})
                 if tool_name in current_mcp_server_tools:
