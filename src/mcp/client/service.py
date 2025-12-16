@@ -9,6 +9,9 @@ from typing import Any
 from uuid import uuid4
 import json
 
+import os
+import re
+
 class MCPClient:
     client_info = Implementation(name="MCP Client", version="0.1.0")
     
@@ -28,6 +31,19 @@ class MCPClient:
     def from_config_file(cls, config_file_path: str) -> 'MCPClient':
         with open(config_file_path) as f:
             config = json.load(f)
+            
+        def expand_env_vars(obj):
+            if isinstance(obj, dict):
+                return {k: expand_env_vars(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [expand_env_vars(v) for v in obj]
+            elif isinstance(obj, str):
+                # Replace ${VAR} with value from os.environ, defaulting to original string if not found
+                return re.sub(r'\$\{([a-zA-Z0-9_]+)\}', lambda m: os.getenv(m.group(1), m.group(0)), obj)
+            else:
+                return obj
+                
+        config = expand_env_vars(config)
         return cls(config=config)
     
     def get_server_names(self) -> list[str]:

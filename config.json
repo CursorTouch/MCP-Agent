@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "windows-mcp": {
+      "description": "MCP server for Windows system tasks like an USER",
+      "command": "uvx",
+      "args": [
+        "windows-mcp"
+      ]
+    }
+  }
+}

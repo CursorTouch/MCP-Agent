@@ -164,7 +164,7 @@ cython_debug/
 mcp_servers
 mcp_store
 notebook.ipynb
-config.json
+# config.json
 
 
 # PyCharm
