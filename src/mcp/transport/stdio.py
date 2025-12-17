@@ -32,6 +32,7 @@ class StdioTransport(BaseTransport):
         self.process: Process | None = None
         self.listen_task: asyncio.Task | None = None
         self.pending: dict[str | int, asyncio.Future] = {}
+        self.stderr_task: asyncio.Task | None = None
 
     async def connect(self) -> None:
         """Create a subprocess and start the listener."""
@@ -56,10 +57,11 @@ class StdioTransport(BaseTransport):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             start_new_session=True,
-            limit=1024 * 1024 * 10 # 10MB limit
+            limit=1024 * 1024 * 10, # 10MB limit
         )
 
         self.listen_task = asyncio.create_task(self.listen())
+        self.stderr_task = asyncio.create_task(self.read_stderr())
 
     async def send_request(self, request: JSONRPCMessage) -> JSONRPCResponse:
         """
@@ -74,7 +76,7 @@ class StdioTransport(BaseTransport):
         # Send request
         if self.process.stdin.is_closing():
             raise MCPError(code=-1, message="Process stdin is closing")
-        self.process.stdin.write((json.dumps(request.model_dump(by_alias=True)) + "\n").encode())
+        self.process.stdin.write((json.dumps(request.model_dump(by_alias=True, exclude_none=True)) + "\n").encode())
         await self.process.stdin.drain()
 
         try:
@@ -149,6 +151,25 @@ class StdioTransport(BaseTransport):
             except Exception as e:
                 logger.error(f"Error reading from process: {e}", exc_info=True)
 
+    async def read_stderr(self):
+        """
+        Read stderr from the subprocess.
+        """
+        if not self.process or not self.process.stderr:
+            return
+
+        while True:
+            try:
+                line = await self.process.stderr.readline()
+                if not line:
+                    break
+                logger.debug(f"Stderr: {line.decode().strip()}")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error reading stderr: {e}")
+                break
+
     async def disconnect(self):
         """Gracefully disconnect and terminate the process."""
         if self.listen_task:
@@ -159,6 +180,15 @@ class StdioTransport(BaseTransport):
                 pass
             finally:
                 self.listen_task = None
+
+        if getattr(self, "stderr_task", None):
+            self.stderr_task.cancel()
+            try:
+                await self.stderr_task
+            except asyncio.CancelledError:
+                pass
+            finally:
+                self.stderr_task = None
 
         if self.process:
             if self.process.stdin:
