@@ -64,11 +64,11 @@ class Process:
         system_prompt=Prompt.system(mcp_client=self.mcp_client,tools=tools,current_thread=self.current_thread,threads=list(self.threads.values()))
         response=await self.llm.ainvoke(messages=[SystemMessage(content=system_prompt)]+self.current_thread.messages)
         decision=xml_preprocessor(response.content.content)
+        decision_content=f"<thought>{decision.get('thought')}</thought><tool_name>{decision.get('tool_name')}</tool_name><tool_args>{' '.join([f'<{key}>{value}</{key}>' for key,value in decision.get('tool_args').items()])}</tool_args>"
+        self.current_thread.messages.append(AIMessage(content=decision_content))
         return decision
     
     async def tool_call(self,tool_name:str,tool_args:dict[str,Any]):
-        tool_call_content=f"<tool_name>{tool_name}</tool_name><tool_args>{' '.join([f'<{key}>{value}</{key}>' for key,value in tool_args.items()])}</tool_args>"
-        self.current_thread.messages.append(AIMessage(content=tool_call_content))
         match tool_name:
             case "Start Tool"|"Switch Tool"|"Stop Tool":
                 tool=self.agent_tools[tool_name]

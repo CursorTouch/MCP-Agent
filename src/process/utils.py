@@ -1,3 +1,4 @@
+from typing import Any
 import re
 import json
 import logging
@@ -36,7 +37,7 @@ def _infer_type(value: str):
 
     return value
 
-def xml_preprocessor(content: str) -> dict[str, any]:
+def xml_preprocessor(content: str) -> dict[str, Any]:
     '''Extracts the tool data from the ai message using XML parsing via Regex'''
     
     # 1. Extract thought
