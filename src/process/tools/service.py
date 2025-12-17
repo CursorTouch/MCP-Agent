@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 @Tool(name="Start Tool",args_schema=Start)
 async def start_tool(process:'Process', subtask:str, server_name:str, **kwargs):
-    '''Start a new thread and become the active thread to solve a subtask'''
+    '''Create and start a new child thread to handle a specific subtask. Use this to delegate work.'''
     task = subtask
     # Capture parent thread to append result to IT, not the child
     parent_thread = process.current_thread
@@ -40,12 +40,12 @@ async def start_tool(process:'Process', subtask:str, server_name:str, **kwargs):
     
     # Append result to PARENT (the one who called the tool)
     content = f"<tool_result>{tool_result}</tool_result>"
-    parent_thread.messages.append(AIMessage(content=content))
+    parent_thread.messages.append(HumanMessage(content=content))
     return tool_result
 
 @Tool(name="Switch Tool",args_schema=Switch)
 async def switch_tool(process:'Process', id:str, **kwargs):
-    '''Switch to another thread from the current thread'''
+    '''Switch control to an existing thread. Use this to resume a suspended task.'''
     try:
         previous_thread = process.current_thread
         
@@ -102,7 +102,7 @@ async def switch_tool(process:'Process', id:str, **kwargs):
 
 @Tool(name="Stop Tool",args_schema=Stop)
 async def stop_tool(process:'Process', id:str|None=None, success:str="", error:str="", **kwargs):
-    '''Stop a specific thread and switch to the previous thread'''
+    '''Complete the current thread's task and return the result to the parent. Use this IMMEDIATELY when the subtask is done.'''
     try:
         target_thread = process.threads.get(id) if id else process.current_thread
         

@@ -1,23 +1,31 @@
 {
   "mcpServers": {
     "windows-mcp": {
-      "description": "MCP server for Windows system tasks like an USER",
+      "description": "Provides access to Windows system capabilities, including desktop automation, window management, and clipboard operations, simulating user interactions.",
       "command": "uvx",
       "args": [
         "windows-mcp"
       ]
     },
     "calculator-mcp": {
-      "description": "MCP server for calculator tasks",
+      "description": "Performs mathematical calculations and expression evaluation to assist with quantitative tasks.",
       "command": "uv",
       "args": [
         "--directory",
         "./mcp_servers",
         "run",
-        "calculator_mcp.py"
+        "calculator_mcp_server.py"
+      ]
+    },
+    "wikipedia-mcp": {
+      "description": "Accesses the vast knowledge base of Wikipedia to search for articles, retrieve summaries, and verify facts.",
+      "command": "uvx",
+      "args": [
+        "wikipedia-mcp"
       ]
     },
     "tavily-mcp": {
+      "description": "Utilizes the Tavily search API to perform high-quality, AI-optimized web searches for real-time information and research.",
       "command": "npx",
       "args": [
         "-y",
@@ -25,6 +33,28 @@
       ],
       "env": {
         "TAVILY_API_KEY": "${TAVILY_API_KEY}"
+      }
+    },
+    "exa-mcp": {
+      "description": "Leverages the Exa (formerly Metaphor) semantic search engine to find high-quality, relevant web content based on meaning and context.",
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.exa.ai/mcp?exaApiKey=${EXA_API_KEY}"
+      ]
+    },
+    "huggingface-mcp": {
+      "description": "Provides access to Hugging Face's API for natural language processing tasks.",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "./mcp_servers/huggingface-mcp-server/src/huggingface",
+        "run",
+        "server.py"
+      ],
+      "env": {
+        "HF_TOKEN": "${HF_TOKEN}"
       }
     }
   }

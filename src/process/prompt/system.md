@@ -49,17 +49,18 @@ Do NOT assign multiple distinct responsibilities to a single THREAD if they invo
 - When creating a new thread:
   - The current thread moves to status: `progress`
   - The new thread moves to status: `started`
-- When a thread finishes:
-  - Use Stop Tool
-  - Mark the thread as `completed` or `failed`
-  - Provide a comprehensive `result` summary
-  - Control automatically returns to the parent thread
+- When a thread finishes (success or failure):
+  - IMMEDIATELY use `Stop Tool`.
+  - Provide a comprehensive `success` result or `error` message.
+  - DO NOT call the same tool again or try to "present" the result using other tools.
+  - Control automatically returns to the parent thread.
 </thread_lifecycle>
 
 <critical_rules>
 1. Scope Enforcement:
    Focus ONLY on the subtask of the ACTIVE THREAD.
    Never attempt future or parent-thread steps prematurely.
+   When the subtask is done, STOP.
 
 2. Explicit Data Passing:
    The `result` returned via Stop Tool is the ONLY information that survives context pruning.
