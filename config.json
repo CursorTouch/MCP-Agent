@@ -7,6 +7,13 @@
         "windows-mcp"
       ]
     },
+    "android-mcp": {
+      "description": "Provides access to Android system capabilities, including app automation, window management, and clipboard operations, simulating user interactions.",
+      "command": "uvx",
+      "args": [
+        "android-mcp"
+      ]
+    },
     "calculator-mcp": {
       "description": "Performs mathematical calculations and expression evaluation to assist with quantitative tasks.",
       "command": "uv",

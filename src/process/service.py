@@ -62,9 +62,22 @@ class Process:
         else:
             tools=list(self.agent_tools.values())
         system_prompt=Prompt.system(mcp_client=self.mcp_client,tools=tools,current_thread=self.current_thread,threads=list(self.threads.values()))
+        # print([tool.name for tool in tools])
+        # print([message.role for message in self.current_thread.messages])
+        # print("LLM call")
+        # print(self.current_thread.messages[-1].content)
         response=await self.llm.ainvoke(messages=[SystemMessage(content=system_prompt)]+self.current_thread.messages)
+        # print("[LLM response]")
+        # print(response.content.content)
+
         decision=xml_preprocessor(response.content.content)
-        decision_content=f"<thought>{decision.get('thought')}</thought><tool_name>{decision.get('tool_name')}</tool_name><tool_args>{' '.join([f'<{key}>{value}</{key}>' for key,value in decision.get('tool_args').items()])}</tool_args>"
+        decision_content=f"""
+            <response>
+                <thought>{decision.get('thought')}</thought>
+                <tool_name>{decision.get('tool_name')}</tool_name>
+                <tool_args>{' '.join([f'<{key}>{value}</{key}>' for key,value in decision.get('tool_args').items()])}</tool_args>
+            </response>
+        """
         self.current_thread.messages.append(AIMessage(content=decision_content))
         return decision
     

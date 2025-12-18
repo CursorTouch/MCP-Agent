@@ -127,7 +127,7 @@ class ChatMistral(BaseChatLLM):
         )
 
     async def ainvoke(self, messages: list[BaseMessage],structured_output:BaseModel|None=None) -> ChatLLMResponse:
-        completion=self.client.chat.complete(
+        completion=await self.client.chat.complete_async(
             model=self.model,
             messages=self.serialize_messages(messages),
             temperature=self.temperature,
