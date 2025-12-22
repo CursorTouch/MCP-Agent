@@ -81,7 +81,7 @@ class Process:
         return decision
     
     async def tool_call(self,tool_name:str,tool_args:dict[str,Any]):
-        helper_text="**NOTE:** Use Stop Tool, Switch Tool, Start Tool or Forget Tool for thread level operations. Use MCP Server tools for task level operations."
+        helper_text="**NOTE:** Use Stop Tool, Switch Tool, Start Tool or Forget Tool for thread level operations."
         match tool_name:
             case "Start Tool"|"Switch Tool"|"Stop Tool"|"Forget Tool":
                 tool=self.agent_tools[tool_name]
@@ -126,7 +126,7 @@ class Process:
 
     async def ainvoke(self,task:str):
         try:
-            messages=[HumanMessage(content=task)]
+            messages=[HumanMessage(content=f'<request>{task}</request>')]
             self.current_thread=Thread(id="thread-main",task=task,status="started",messages=messages, mcp_server="", success="",error="")
             self.threads[self.current_thread.id]=self.current_thread
 
@@ -219,8 +219,9 @@ class Process:
                     logger.info(f"🧵 Thread ID: {self.current_thread.id}")
                     logger.info(f"❌ Error: {error_msg}")
                     if current_thread_mcp_server_before:
-                        self.mcp_client.close_session(current_thread_mcp_server_before)
-                        logger.info(f"🔌 Disconnected from: {current_thread_mcp_server_before}")
+                        if self.mcp_client.get_session(current_thread_id_before):
+                            await self.mcp_client.close_session(current_thread_id_before)
+                            logger.info(f"🔌 Disconnected from: {current_thread_mcp_server_before}")
                     
                     # If Main Thread crashed, we can't recover
                     if current_thread_id_before == "thread-main":

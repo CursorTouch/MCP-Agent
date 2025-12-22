@@ -21,7 +21,7 @@ async def start_tool(process:'Process', subtask:str, server_name:str, **kwargs):
         await process.mcp_client.create_session(server_name.lower())
         logger.debug(f"[MCP] Created session for {server_name}")
         
-        messages = [HumanMessage(content=task)]
+        messages = [HumanMessage(content=f'<request>{task}</request>')]
         # Create the new child thread
         child_thread = Thread(task=task, mcp_server=server_name, status="started", messages=messages, success="", error="", parent_id=process.current_thread.id)
         process.threads[child_thread.id] = child_thread
