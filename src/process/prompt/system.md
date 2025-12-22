@@ -85,6 +85,11 @@ Do NOT assign multiple distinct responsibilities to a single THREAD if they invo
 
 6. Server Selection:
    Only connect to an MCP server whose description clearly matches the subtask.
+
+7. Process Table Maintenance (Zombie Prevention):
+   Identify completed or failed threads that have already returned their results to the parent.
+   Use `Forget Tool` to reap (remove) these threads from the process table to prevent context clutter.
+   DO NOT remove the active thread or threads that are still in progress.
 </critical_rules>
 
 <available_tools>

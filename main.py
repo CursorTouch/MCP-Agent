@@ -11,7 +11,7 @@ load_dotenv()
 
 llm=ChatMistral(model='mistral-small-latest',api_key=os.getenv('MISTRAL_API_KEY'),temperature=0)
 # llm=ChatOllama(model='qwen3-vl:235b-cloud',temperature=0)
-# llm=ChatOpenRouter(model='nvidia/nemotron-3-nano-30b-a3b:free',api_key=os.getenv('OPENROUTER_API_KEY'),temperature=0)
+# llm=ChatOpenRouter(model='qwen/qwen3-coder:free',api_key=os.getenv('OPENROUTER_API_KEY'),temperature=0)
 # llm=ChatGoogle(api_key=os.getenv('GOOGLE_API_KEY'),model='gemini-2.0-flash-exp',temperature=0)
 mcp_client=MCPClient.from_config_file('./config.json')
 process=Process(mcp_client=mcp_client,llm=llm)

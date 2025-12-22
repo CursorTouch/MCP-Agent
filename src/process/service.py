@@ -1,5 +1,5 @@
 from src.messages import SystemMessage,HumanMessage,AIMessage,ImageMessage
-from src.process.tools.service import start_tool,stop_tool,switch_tool
+from src.process.tools.service import start_tool,stop_tool,switch_tool,forget_tool
 from src.mcp.types.content import TextContent,ImageContent
 from src.mcp.types.tools import CallToolRequestParams
 from src.process.utils import xml_preprocessor
@@ -29,7 +29,7 @@ class Process:
         self.threads:dict[str,Thread]={}
         self.mcp_client=mcp_client
         self.llm=llm
-        self.agent_tools:dict[str,Tool]={"Start Tool":start_tool,"Stop Tool":stop_tool,"Switch Tool":switch_tool}
+        self.agent_tools:dict[str,Tool]={"Start Tool":start_tool,"Stop Tool":stop_tool,"Switch Tool":switch_tool,"Forget Tool":forget_tool}
         self.mcp_server_tools:dict[str,dict[str,Tool]]={}
 
     async def llm_call(self):
@@ -62,10 +62,9 @@ class Process:
         else:
             tools=list(self.agent_tools.values())
         system_prompt=Prompt.system(mcp_client=self.mcp_client,tools=tools,current_thread=self.current_thread,threads=list(self.threads.values()))
+        # print(f'Current Thread ID: {self.current_thread.id}')
         # print([tool.name for tool in tools])
-        # print([message.role for message in self.current_thread.messages])
-        # print("LLM call")
-        # print(self.current_thread.messages[-1].content)
+        # print([(message.role,shorten(message.content, width=50, placeholder="...")) for message in self.current_thread.messages])
         response=await self.llm.ainvoke(messages=[SystemMessage(content=system_prompt)]+self.current_thread.messages)
         # print("[LLM response]")
         # print(response.content.content)
@@ -82,8 +81,9 @@ class Process:
         return decision
     
     async def tool_call(self,tool_name:str,tool_args:dict[str,Any]):
+        helper_text="**NOTE:** Use Stop Tool, Switch Tool, Start Tool or Forget Tool for thread level operations. Use MCP Server tools for task level operations."
         match tool_name:
-            case "Start Tool"|"Switch Tool"|"Stop Tool":
+            case "Start Tool"|"Switch Tool"|"Stop Tool"|"Forget Tool":
                 tool=self.agent_tools[tool_name]
                 logger.debug(f"[Tool Call] {tool_name}({', '.join([f'{key}={value}' for key,value in tool_args.items()])})")
                 tool_result = await tool.ainvoke(process=self, **tool_args)
@@ -105,7 +105,7 @@ class Process:
                                 # TODO: Handle other types of tool results
                                 pass
                         tool_result="\n".join(texts)
-                        content=f"<tool_result>{tool_result}</tool_result>"
+                        content=f"<tool_result>{tool_result}</tool_result>\n{helper_text}"
                         if images:
                             self.current_thread.messages.append(ImageMessage(images=images,content=content))
                         else:
@@ -120,7 +120,7 @@ class Process:
                     tool_result=f"Tool {tool_name} not found"
                     logger.debug(f"[Tool Result] {tool_result}")
 
-                content=f"<tool_result>{tool_result}</tool_result>"
+                content=f"<tool_result>{tool_result}</tool_result>\n{helper_text}"
                 self.current_thread.messages.append(HumanMessage(content=content))
                 return tool_result
 
@@ -193,6 +193,10 @@ class Process:
                             if current_thread_mcp_server_before:
                                 logger.info(f"🔌 Disconnected from: {current_thread_mcp_server_before}")
 
+                        case "Forget Tool":
+                            logger.info(f"🗑️  Forgetting Thread:")
+                            logger.info(f"🧵 Thread ID: {tool_args.get('id')}")
+
                         case _:
                             thought=decision.get("thought")
                             logger.info(f"🧠 Thought: {thought}")
@@ -210,14 +214,21 @@ class Process:
                     # Force stop the crashing thread, allowing parent to recover
                     stop_result = await self.tool_call("Stop Tool", {"error": error_msg})
                     
+                    # LOG THE AUTOMATIC STOP
+                    logger.info(f"⏹️  Stopping Crashed Thread:")
+                    logger.info(f"🧵 Thread ID: {self.current_thread.id}")
+                    logger.info(f"❌ Error: {error_msg}")
+                    if current_thread_mcp_server_before:
+                        self.mcp_client.close_session(current_thread_mcp_server_before)
+                        logger.info(f"🔌 Disconnected from: {current_thread_mcp_server_before}")
+                    
                     # If Main Thread crashed, we can't recover
                     if current_thread_id_before == "thread-main":
-                        logger.warn("⚠️ Main Thread Crashed. Closing all MCP sessions...")
-                        await self.mcp_client.close_all_sessions()
+                        logger.warn("⚠️ Main Thread Crashed.")
                         return f"Process Crashed: {stop_result}"
             
             return "Max global steps exceeded."
         except (KeyboardInterrupt,asyncio.CancelledError):
-            logger.warn("⚠️ KeyboardInterrupt. Closing all MCP sessions...")
+            logger.warn("⚠️ KeyboardInterrupt.\nClosing all MCP sessions...")
             await self.mcp_client.close_all_sessions()
             return "Process Interrupted."

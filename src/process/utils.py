@@ -47,6 +47,7 @@ def xml_preprocessor(content: str) -> dict[str, Any]:
     # 2. Extract tool_name
     name_match = re.search(r'<tool_name>\s*(.*?)\s*</tool_name>', content, re.DOTALL)
     if not name_match:
+        print(content)
         raise ValueError("No <tool_name> found")
     tool_name = name_match.group(1).strip()
 

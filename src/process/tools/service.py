@@ -1,4 +1,4 @@
-from src.process.tools.views import Start,Switch,Stop
+from src.process.tools.views import Start,Switch,Stop,Forget
 from src.messages import HumanMessage,AIMessage
 from src.tool.service import Tool
 from src.process.views import Thread
@@ -155,4 +155,34 @@ async def stop_tool(process:'Process', id:str|None=None, success:str="", error:s
         content = f"<tool_result>{tool_result}</tool_result>"
         process.current_thread.messages.append(HumanMessage(content=content))
 
+    return tool_result
+
+@Tool(name="Forget Tool",args_schema=Forget)
+async def forget_tool(process:'Process', id:str, **kwargs):
+    '''Permanently remove a completed or failed thread from memory. Use this to clean up the process table after you have received and processed a child's result.'''
+    try:
+        if id in process.threads:
+            # Prevent deleting the current active thread
+            if id == process.current_thread.id:
+                tool_result = f"Error: Cannot forget the currently active thread ({id}). Switch to parent first."
+            # Prevent deleting the main thread
+            elif id == "thread-main":
+                tool_result = "Error: Cannot forget the Main Thread."
+            else:
+                thread = process.threads[id]
+                # Only allow forgetting finished threads
+                if thread.status in ["completed", "failed"]:
+                    del process.threads[id]
+                    tool_result = f"Successfully forgot Thread ID: {id}. Memory freed."
+                    logger.debug(f"[Thread] Forgot Thread ID: {id}")
+                else:
+                    tool_result = f"Error: Thread {id} is in status '{thread.status}'. Can only forget 'completed' or 'failed' threads."
+        else:
+            tool_result = f"Error: Thread ID {id} not found."
+    except Exception as e:
+        tool_result = f"Error forgetting thread: {str(e)}"
+        logger.debug(f"[Thread] Error forgetting thread: {str(e)}")
+        
+    content = f"<tool_result>{tool_result}</tool_result>"
+    process.current_thread.messages.append(HumanMessage(content=content))
     return tool_result

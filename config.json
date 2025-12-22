@@ -2,10 +2,16 @@
   "mcpServers": {
     "windows-mcp": {
       "description": "Provides access to Windows system capabilities, including desktop automation, window management, and clipboard operations, simulating user interactions.",
-      "command": "uvx",
+      "command": "uv",
       "args": [
+        "--directory",
+        "D://Projects//Windows-MCP",
+        "run",
         "windows-mcp"
-      ]
+      ],
+      "env": {
+        "ANONYMIZED_TELEMETRY": "true"
+      }
     },
     "android-mcp": {
       "description": "Provides access to Android system capabilities, including app automation, window management, and clipboard operations, simulating user interactions.",
